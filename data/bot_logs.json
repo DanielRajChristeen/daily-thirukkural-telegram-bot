@@ -1,0 +1,560 @@
+[
+  {
+    "id": "0kp7kjx",
+    "timestamp": 1789191825580,
+    "chatId": 0,
+    "username": "admin",
+    "type": "system",
+    "text": "Admin authenticated successfully (username: Admin)",
+    "status": "success"
+  },
+  {
+    "id": "ieje354",
+    "timestamp": 1789191823563,
+    "chatId": 0,
+    "username": "admin",
+    "type": "system",
+    "text": "Admin password changed successfully",
+    "status": "success"
+  },
+  {
+    "id": "36escrt",
+    "timestamp": 1789191821989,
+    "chatId": 0,
+    "username": "system",
+    "type": "system",
+    "text": "Failed admin login attempt (username: Admin)",
+    "status": "error"
+  },
+  {
+    "id": "q5j74zw",
+    "timestamp": 1789191819704,
+    "chatId": 0,
+    "username": "admin",
+    "type": "system",
+    "text": "Admin authenticated successfully (username: Admin)",
+    "status": "success"
+  },
+  {
+    "id": "820b7o7",
+    "timestamp": 1789191817620,
+    "chatId": 0,
+    "username": "admin",
+    "type": "system",
+    "text": "Admin password changed successfully",
+    "status": "success"
+  },
+  {
+    "id": "v7qaqyb",
+    "timestamp": 1789191815950,
+    "chatId": 0,
+    "username": "admin",
+    "type": "system",
+    "text": "Password change failed: Current password is incorrect.",
+    "status": "error"
+  },
+  {
+    "id": "lwak0vw",
+    "timestamp": 1789191814119,
+    "chatId": 0,
+    "username": "system",
+    "type": "system",
+    "text": "Failed admin login attempt (username: Admin)",
+    "status": "error"
+  },
+  {
+    "id": "jj3gznh",
+    "timestamp": 1789191811525,
+    "chatId": 0,
+    "username": "admin",
+    "type": "system",
+    "text": "Admin authenticated successfully (username: Admin)",
+    "status": "success"
+  },
+  {
+    "id": "tvi38jv",
+    "timestamp": 1789191810493,
+    "chatId": 0,
+    "username": "system",
+    "type": "system",
+    "text": "Bot initialized in live Long-Polling mode.",
+    "status": "info"
+  },
+  {
+    "id": "4kw0l7a",
+    "timestamp": 1789191079182,
+    "chatId": 0,
+    "username": "system",
+    "type": "system",
+    "text": "Polling loop suspended: Webhook conflict detected (409).",
+    "status": "info"
+  },
+  {
+    "id": "cc8zud8",
+    "timestamp": 1789190671166,
+    "chatId": 0,
+    "username": "system",
+    "type": "system",
+    "text": "Bot initialized in live Long-Polling mode.",
+    "status": "info"
+  },
+  {
+    "id": "o6hp8ob",
+    "timestamp": 1789190655769,
+    "chatId": 0,
+    "username": "system",
+    "type": "system",
+    "text": "Bot initialized in live Long-Polling mode.",
+    "status": "info"
+  },
+  {
+    "id": "st7v5vu",
+    "timestamp": 1789190378190,
+    "chatId": 0,
+    "username": "system",
+    "type": "system",
+    "text": "Bot initialized in live Long-Polling mode.",
+    "status": "info"
+  },
+  {
+    "id": "0ohhj8b",
+    "timestamp": 1789190370223,
+    "chatId": 0,
+    "username": "system",
+    "type": "system",
+    "text": "Bot initialized in live Long-Polling mode.",
+    "status": "info"
+  },
+  {
+    "id": "nvnsw5r",
+    "timestamp": 1789189954640,
+    "chatId": 0,
+    "username": "admin",
+    "type": "system",
+    "text": "Admin authenticated via Google Sign-In: danielrajpchristeen@gmail.com",
+    "status": "success"
+  },
+  {
+    "id": "h97zm9y",
+    "timestamp": 1789189784748,
+    "chatId": 0,
+    "username": "system",
+    "type": "system",
+    "text": "Bot initialized in live Long-Polling mode.",
+    "status": "info"
+  },
+  {
+    "id": "3981280",
+    "timestamp": 1789189771190,
+    "chatId": 0,
+    "username": "system",
+    "type": "system",
+    "text": "Unauthorized admin access attempt: intruder@gmail.com",
+    "status": "error"
+  },
+  {
+    "id": "ja2uxhw",
+    "timestamp": 1789189769257,
+    "chatId": 0,
+    "username": "admin",
+    "type": "system",
+    "text": "Admin authenticated via Google Sign-In: danielrajpchristeen@gmail.com",
+    "status": "success"
+  },
+  {
+    "id": "26c6m50",
+    "timestamp": 1789189765974,
+    "chatId": 0,
+    "username": "system",
+    "type": "system",
+    "text": "Bot initialized in live Long-Polling mode.",
+    "status": "info"
+  },
+  {
+    "id": "cm8w6hj",
+    "timestamp": 1789189765974,
+    "chatId": 0,
+    "username": "system",
+    "type": "system",
+    "text": "Deleted stale webhook (https://daily-thirukkural-telegram-bot-companion-1.ai.studio/api/telegram-webhook) to switch to active Poller",
+    "status": "info"
+  },
+  {
+    "id": "hce8nlr",
+    "timestamp": 1789189257563,
+    "chatId": 0,
+    "username": "system",
+    "type": "system",
+    "text": "Scheduler processed daily reminders for 1 subscribers",
+    "status": "info"
+  },
+  {
+    "id": "zf76q2g",
+    "timestamp": 1789189257562,
+    "chatId": 5164666817,
+    "username": "Daniel_Raj_7",
+    "type": "outgoing",
+    "text": "📅 DAILY REMINDER (Sent via Telegram)",
+    "status": "success"
+  },
+  {
+    "id": "anm2929",
+    "timestamp": 1789189157495,
+    "chatId": 0,
+    "username": "system",
+    "type": "system",
+    "text": "Polling loop suspended: Webhook conflict detected (409).",
+    "status": "info"
+  },
+  {
+    "id": "2vtpfis",
+    "timestamp": 1789188970851,
+    "chatId": 5164666817,
+    "username": "Daniel_Raj_7",
+    "type": "outgoing",
+    "text": "⏰ <b>Set Custom Daily Reminder / தனிப்பயன் நினைவூட்டல்:</b>\n\nConfigure your exact custom delivery time in India Standard Time (IST).\n<i>There are <b>no pre-defined fixed times</b> — you can customize to ANY hour and minute!</i>\n\n• <b>Active Schedule:</b> 11:00 PM\n• <b>Draft Time:</b> <b>11:00 AM (IST)</b>\n\n<b>How to set your customized time:</b>\n1️⃣ Use the <b>interactive buttons</b> below to fine-tune hour & minute.\n2️⃣ Tap <b>📱 Open Visual Time Picker</b> for a graphical circular clock dial.\n🔗 <b>Direct Web Link:</b> <a href=\"https://ais-dev-mdmgkwte27m3mohqxzknen-325948981974.asia-east1.run.app/time-picker?chatId=5164666817&time=11%3A00%3AAM\">Open Visual Clock Dial Picker</a>\n3️⃣ Or simply <b>type your custom time in chat</b> (e.g. <code>7:15 AM</code>, <code>18:30</code>, <code>6:45 PM</code>, <code>/time 05:20 AM</code>, or <code>none</code>).",
+    "status": "success"
+  },
+  {
+    "id": "t1xsoko",
+    "timestamp": 1789188969934,
+    "chatId": 5164666817,
+    "username": "Daniel_Raj_7",
+    "type": "incoming",
+    "text": "Pressed button: draft_time_11_00_AM",
+    "status": "success"
+  },
+  {
+    "id": "k7cosrx",
+    "timestamp": 1789188955160,
+    "chatId": 5164666817,
+    "username": "Daniel_Raj_7",
+    "type": "outgoing",
+    "text": "⏰ <b>Set Custom Daily Reminder / தனிப்பயன் நினைவூட்டல்:</b>\n\nConfigure your exact custom delivery time in India Standard Time (IST).\n<i>There are <b>no pre-defined fixed times</b> — you can customize to ANY hour and minute!</i>\n\n• <b>Active Schedule:</b> 11:00 PM\n• <b>Draft Time:</b> <b>11:00 PM (IST)</b>\n\n<b>How to set your customized time:</b>\n1️⃣ Use the <b>interactive buttons</b> below to fine-tune hour & minute.\n2️⃣ Tap <b>📱 Open Visual Time Picker</b> for a graphical circular clock dial.\n🔗 <b>Direct Web Link:</b> <a href=\"https://ais-dev-mdmgkwte27m3mohqxzknen-325948981974.asia-east1.run.app/time-picker?chatId=5164666817&time=11%3A00%3APM\">Open Visual Clock Dial Picker</a>\n3️⃣ Or simply <b>type your custom time in chat</b> (e.g. <code>7:15 AM</code>, <code>18:30</code>, <code>6:45 PM</code>, <code>/time 05:20 AM</code>, or <code>none</code>).",
+    "status": "success"
+  },
+  {
+    "id": "9mgfo6f",
+    "timestamp": 1789188953749,
+    "chatId": 5164666817,
+    "username": "Daniel_Raj_7",
+    "type": "incoming",
+    "text": "Pressed button: btn_time_menu",
+    "status": "success"
+  },
+  {
+    "id": "rca3hjw",
+    "timestamp": 1789188948377,
+    "chatId": 5164666817,
+    "username": "Daniel_Raj_7",
+    "type": "outgoing",
+    "text": "வணக்கம்! Welcome to Daily Thirukkural Bot 🌸\n\nI will fetch and display a Thirukkural couplet with its explanation in Tamil, English, or both daily.\n\n<b>Your Current Settings:</b>\n🌐 Language: <b>BOTH</b>\n⏰ Daily Reminder: <b>11:00:PM</b>\n\nUse the buttons below to interact with me!",
+    "status": "success"
+  },
+  {
+    "id": "qluclks",
+    "timestamp": 1789188946776,
+    "chatId": 5164666817,
+    "username": "Daniel_Raj_7",
+    "type": "incoming",
+    "text": "/start",
+    "status": "success"
+  },
+  {
+    "id": "tbd21ot",
+    "timestamp": 1789188777868,
+    "chatId": 0,
+    "username": "system",
+    "type": "system",
+    "text": "Bot initialized in live Long-Polling mode.",
+    "status": "info"
+  },
+  {
+    "id": "dr60lq5",
+    "timestamp": 1789188774186,
+    "chatId": 0,
+    "username": "system",
+    "type": "system",
+    "text": "Bot initialized in live Long-Polling mode.",
+    "status": "info"
+  },
+  {
+    "id": "jb1y8yz",
+    "timestamp": 1789188262221,
+    "chatId": 0,
+    "username": "system",
+    "type": "system",
+    "text": "Bot initialized in live Long-Polling mode.",
+    "status": "info"
+  },
+  {
+    "id": "ltu5wtm",
+    "timestamp": 1789145225559,
+    "chatId": 0,
+    "username": "system",
+    "type": "system",
+    "text": "Bot initialized in live Long-Polling mode.",
+    "status": "info"
+  },
+  {
+    "id": "cdkarq3",
+    "timestamp": 1789145093278,
+    "chatId": 5164666817,
+    "username": "Daniel_Raj_7",
+    "type": "outgoing",
+    "text": "📱 <b>Visual Time Picker (Clock Dial UI)</b>\n\nOpen the interactive circular analog clock dial to set your exact customized reminder time:\n\n🔗 <b>Direct Link:</b> <a href=\"http://ais-dev-mdmgkwte27m3mohqxzknen-325948981974.asia-east1.run.app/time-picker?chatId=5164666817&time=06%3A00%3AAM\">Open Visual Clock Dial</a>\n\n<i>Tip: You can also use the step buttons (+1h, -5m) in the previous menu or simply type your custom time in chat anytime (e.g. <code>7:15 AM</code>, <code>18:30</code>, or <code>none</code>).</i>",
+    "status": "success"
+  },
+  {
+    "id": "e09vho2",
+    "timestamp": 1789145093035,
+    "chatId": 5164666817,
+    "username": "Daniel_Raj_7",
+    "type": "incoming",
+    "text": "Pressed button: open_flask_ui_5164666817",
+    "status": "success"
+  },
+  {
+    "id": "cmt147c",
+    "timestamp": 1789145091681,
+    "chatId": 5164666817,
+    "username": "Daniel_Raj_7",
+    "type": "outgoing",
+    "text": "📱 <b>Visual Time Picker (Clock Dial UI)</b>\n\nOpen the interactive circular analog clock dial to set your exact customized reminder time:\n\n🔗 <b>Direct Link:</b> <a href=\"http://ais-dev-mdmgkwte27m3mohqxzknen-325948981974.asia-east1.run.app/time-picker?chatId=5164666817&time=06%3A00%3AAM\">Open Visual Clock Dial</a>\n\n<i>Tip: You can also use the step buttons (+1h, -5m) in the previous menu or simply type your custom time in chat anytime (e.g. <code>7:15 AM</code>, <code>18:30</code>, or <code>none</code>).</i>",
+    "status": "success"
+  },
+  {
+    "id": "vafa2pw",
+    "timestamp": 1789145090966,
+    "chatId": 5164666817,
+    "username": "Daniel_Raj_7",
+    "type": "incoming",
+    "text": "Pressed button: open_flask_ui_5164666817",
+    "status": "success"
+  },
+  {
+    "id": "354zeon",
+    "timestamp": 1789145086308,
+    "chatId": 5164666817,
+    "username": "Daniel_Raj_7",
+    "type": "outgoing",
+    "text": "📱 <b>Visual Time Picker (Clock Dial UI)</b>\n\nOpen the interactive circular analog clock dial to set your exact customized reminder time:\n\n🔗 <b>Direct Link:</b> <a href=\"http://ais-dev-mdmgkwte27m3mohqxzknen-325948981974.asia-east1.run.app/time-picker?chatId=5164666817&time=06%3A00%3AAM\">Open Visual Clock Dial</a>\n\n<i>Tip: You can also use the step buttons (+1h, -5m) in the previous menu or simply type your custom time in chat anytime (e.g. <code>7:15 AM</code>, <code>18:30</code>, or <code>none</code>).</i>",
+    "status": "success"
+  },
+  {
+    "id": "gnmhcuj",
+    "timestamp": 1789145085587,
+    "chatId": 5164666817,
+    "username": "Daniel_Raj_7",
+    "type": "incoming",
+    "text": "Pressed button: open_flask_ui_5164666817",
+    "status": "success"
+  },
+  {
+    "id": "9xbkegl",
+    "timestamp": 1789145079055,
+    "chatId": 5164666817,
+    "username": "Daniel_Raj_7",
+    "type": "outgoing",
+    "text": "⏰ <b>Set Custom Daily Reminder / தனிப்பயன் நினைவூட்டல்:</b>\n\nConfigure your exact custom delivery time in India Standard Time (IST).\n<i>There are <b>no pre-defined fixed times</b> — you can customize to ANY hour and minute!</i>\n\n• <b>Active Schedule:</b> 06:00 AM\n• <b>Draft Time:</b> <b>06:00 AM (IST)</b>\n\n<b>How to set your customized time:</b>\n1️⃣ Use the <b>interactive buttons</b> below to fine-tune hour & minute.\n2️⃣ Tap <b>📱 Open Visual Time Picker</b> for a graphical circular clock dial.\n3️⃣ Or simply <b>type your custom time in chat</b> (e.g. <code>7:15 AM</code>, <code>18:30</code>, <code>6:45 PM</code>, <code>/time 05:20 AM</code>, or <code>none</code>).",
+    "status": "success"
+  },
+  {
+    "id": "ei0f98x",
+    "timestamp": 1789145078554,
+    "chatId": 5164666817,
+    "username": "Daniel_Raj_7",
+    "type": "incoming",
+    "text": "Pressed button: btn_time_menu",
+    "status": "success"
+  },
+  {
+    "id": "cduyh3y",
+    "timestamp": 1789145076373,
+    "chatId": 5164666817,
+    "username": "Daniel_Raj_7",
+    "type": "outgoing",
+    "text": "வணக்கம்! Welcome to Daily Thirukkural Bot 🌸\n\nI will fetch and display a Thirukkural couplet with its explanation in Tamil, English, or both daily.\n\n<b>Your Current Settings:</b>\n🌐 Language: <b>BOTH</b>\n⏰ Daily Reminder: <b>06:00 AM</b>\n\nUse the buttons below to interact with me!",
+    "status": "success"
+  },
+  {
+    "id": "5t913nx",
+    "timestamp": 1789145075732,
+    "chatId": 5164666817,
+    "username": "Daniel_Raj_7",
+    "type": "incoming",
+    "text": "Pressed button: btn_menu",
+    "status": "success"
+  },
+  {
+    "id": "t7c1p9a",
+    "timestamp": 1789145075281,
+    "chatId": 5164666817,
+    "username": "Daniel_Raj_7",
+    "type": "outgoing",
+    "text": "📱 <b>Visual Time Picker (Clock Dial UI)</b>\n\nOpen the interactive circular analog clock dial to set your exact customized reminder time:\n\n🔗 <b>Direct Link:</b> <a href=\"http://ais-dev-mdmgkwte27m3mohqxzknen-325948981974.asia-east1.run.app/time-picker?chatId=5164666817&time=06%3A00%3AAM\">Open Visual Clock Dial</a>\n\n<i>Tip: You can also use the step buttons (+1h, -5m) in the previous menu or simply type your custom time in chat anytime (e.g. <code>7:15 AM</code>, <code>18:30</code>, or <code>none</code>).</i>",
+    "status": "success"
+  },
+  {
+    "id": "swysxzx",
+    "timestamp": 1789145075032,
+    "chatId": 5164666817,
+    "username": "Daniel_Raj_7",
+    "type": "incoming",
+    "text": "Pressed button: open_flask_ui_5164666817",
+    "status": "success"
+  },
+  {
+    "id": "opqgw3y",
+    "timestamp": 1789145074624,
+    "chatId": 5164666817,
+    "username": "Daniel_Raj_7",
+    "type": "outgoing",
+    "text": "📱 <b>Visual Time Picker (Clock Dial UI)</b>\n\nOpen the interactive circular analog clock dial to set your exact customized reminder time:\n\n🔗 <b>Direct Link:</b> <a href=\"http://ais-dev-mdmgkwte27m3mohqxzknen-325948981974.asia-east1.run.app/time-picker?chatId=5164666817&time=06%3A00%3AAM\">Open Visual Clock Dial</a>\n\n<i>Tip: You can also use the step buttons (+1h, -5m) in the previous menu or simply type your custom time in chat anytime (e.g. <code>7:15 AM</code>, <code>18:30</code>, or <code>none</code>).</i>",
+    "status": "success"
+  },
+  {
+    "id": "savn63k",
+    "timestamp": 1789145074379,
+    "chatId": 5164666817,
+    "username": "Daniel_Raj_7",
+    "type": "incoming",
+    "text": "Pressed button: open_flask_ui_5164666817",
+    "status": "success"
+  },
+  {
+    "id": "tlv2ihw",
+    "timestamp": 1789145073718,
+    "chatId": 5164666817,
+    "username": "Daniel_Raj_7",
+    "type": "outgoing",
+    "text": "📱 <b>Visual Time Picker (Clock Dial UI)</b>\n\nOpen the interactive circular analog clock dial to set your exact customized reminder time:\n\n🔗 <b>Direct Link:</b> <a href=\"http://ais-dev-mdmgkwte27m3mohqxzknen-325948981974.asia-east1.run.app/time-picker?chatId=5164666817&time=06%3A00%3AAM\">Open Visual Clock Dial</a>\n\n<i>Tip: You can also use the step buttons (+1h, -5m) in the previous menu or simply type your custom time in chat anytime (e.g. <code>7:15 AM</code>, <code>18:30</code>, or <code>none</code>).</i>",
+    "status": "success"
+  },
+  {
+    "id": "4uihkk6",
+    "timestamp": 1789145073470,
+    "chatId": 5164666817,
+    "username": "Daniel_Raj_7",
+    "type": "incoming",
+    "text": "Pressed button: open_flask_ui_5164666817",
+    "status": "success"
+  },
+  {
+    "id": "hrdus3h",
+    "timestamp": 1789145070217,
+    "chatId": 5164666817,
+    "username": "Daniel_Raj_7",
+    "type": "outgoing",
+    "text": "📱 <b>Visual Time Picker (Clock Dial UI)</b>\n\nOpen the interactive circular analog clock dial to set your exact customized reminder time:\n\n🔗 <b>Direct Link:</b> <a href=\"http://ais-dev-mdmgkwte27m3mohqxzknen-325948981974.asia-east1.run.app/time-picker?chatId=5164666817&time=06%3A00%3AAM\">Open Visual Clock Dial</a>\n\n<i>Tip: You can also use the step buttons (+1h, -5m) in the previous menu or simply type your custom time in chat anytime (e.g. <code>7:15 AM</code>, <code>18:30</code>, or <code>none</code>).</i>",
+    "status": "success"
+  },
+  {
+    "id": "86mal1a",
+    "timestamp": 1789145069967,
+    "chatId": 5164666817,
+    "username": "Daniel_Raj_7",
+    "type": "incoming",
+    "text": "Pressed button: open_flask_ui_5164666817",
+    "status": "success"
+  },
+  {
+    "id": "lpx7v5h",
+    "timestamp": 1789145068758,
+    "chatId": 5164666817,
+    "username": "Daniel_Raj_7",
+    "type": "outgoing",
+    "text": "📱 <b>Visual Time Picker (Clock Dial UI)</b>\n\nOpen the interactive circular analog clock dial to set your exact customized reminder time:\n\n🔗 <b>Direct Link:</b> <a href=\"http://ais-dev-mdmgkwte27m3mohqxzknen-325948981974.asia-east1.run.app/time-picker?chatId=5164666817&time=06%3A00%3AAM\">Open Visual Clock Dial</a>\n\n<i>Tip: You can also use the step buttons (+1h, -5m) in the previous menu or simply type your custom time in chat anytime (e.g. <code>7:15 AM</code>, <code>18:30</code>, or <code>none</code>).</i>",
+    "status": "success"
+  },
+  {
+    "id": "13ymvjl",
+    "timestamp": 1789145068516,
+    "chatId": 5164666817,
+    "username": "Daniel_Raj_7",
+    "type": "incoming",
+    "text": "Pressed button: open_flask_ui_5164666817",
+    "status": "success"
+  },
+  {
+    "id": "2yxsmb0",
+    "timestamp": 1789145064543,
+    "chatId": 5164666817,
+    "username": "Daniel_Raj_7",
+    "type": "outgoing",
+    "text": "📱 <b>Visual Time Picker (Clock Dial UI)</b>\n\nOpen the interactive circular analog clock dial to set your exact customized reminder time:\n\n🔗 <b>Direct Link:</b> <a href=\"http://ais-dev-mdmgkwte27m3mohqxzknen-325948981974.asia-east1.run.app/time-picker?chatId=5164666817&time=06%3A00%3AAM\">Open Visual Clock Dial</a>\n\n<i>Tip: You can also use the step buttons (+1h, -5m) in the previous menu or simply type your custom time in chat anytime (e.g. <code>7:15 AM</code>, <code>18:30</code>, or <code>none</code>).</i>",
+    "status": "success"
+  },
+  {
+    "id": "9f17etl",
+    "timestamp": 1789145064292,
+    "chatId": 5164666817,
+    "username": "Daniel_Raj_7",
+    "type": "incoming",
+    "text": "Pressed button: open_flask_ui_5164666817",
+    "status": "success"
+  },
+  {
+    "id": "tlqdgqg",
+    "timestamp": 1789145061410,
+    "chatId": 5164666817,
+    "username": "Daniel_Raj_7",
+    "type": "outgoing",
+    "text": "⏰ <b>Set Custom Daily Reminder / தனிப்பயன் நினைவூட்டல்:</b>\n\nConfigure your exact custom delivery time in India Standard Time (IST).\n<i>There are <b>no pre-defined fixed times</b> — you can customize to ANY hour and minute!</i>\n\n• <b>Active Schedule:</b> 06:00 AM\n• <b>Draft Time:</b> <b>06:00 AM (IST)</b>\n\n<b>How to set your customized time:</b>\n1️⃣ Use the <b>interactive buttons</b> below to fine-tune hour & minute.\n2️⃣ Tap <b>📱 Open Visual Time Picker</b> for a graphical circular clock dial.\n3️⃣ Or simply <b>type your custom time in chat</b> (e.g. <code>7:15 AM</code>, <code>18:30</code>, <code>6:45 PM</code>, <code>/time 05:20 AM</code>, or <code>none</code>).",
+    "status": "success"
+  },
+  {
+    "id": "qwsgbgj",
+    "timestamp": 1789145060437,
+    "chatId": 5164666817,
+    "username": "Daniel_Raj_7",
+    "type": "incoming",
+    "text": "Pressed button: btn_time_menu",
+    "status": "success"
+  },
+  {
+    "id": "5wjtatx",
+    "timestamp": 1789145035762,
+    "chatId": 5164666817,
+    "username": "Daniel_Raj_7",
+    "type": "outgoing",
+    "text": "வணக்கம்! Welcome to Daily Thirukkural Bot 🌸\n\nI will fetch and display a Thirukkural couplet with its explanation in Tamil, English, or both daily.\n\n<b>Your Current Settings:</b>\n🌐 Language: <b>BOTH</b>\n⏰ Daily Reminder: <b>06:00 AM</b>\n\nUse the buttons below to interact with me!",
+    "status": "success"
+  },
+  {
+    "id": "lo4i1mb",
+    "timestamp": 1789145034836,
+    "chatId": 5164666817,
+    "username": "Daniel_Raj_7",
+    "type": "incoming",
+    "text": "Pressed button: btn_menu",
+    "status": "success"
+  },
+  {
+    "id": "qwtlnze",
+    "timestamp": 1789144466946,
+    "chatId": 0,
+    "username": "system",
+    "type": "system",
+    "text": "Bot initialized in live Long-Polling mode.",
+    "status": "info"
+  },
+  {
+    "id": "qzi3qmd",
+    "timestamp": 1789144416515,
+    "chatId": 0,
+    "username": "system",
+    "type": "system",
+    "text": "Bot initialized in live Long-Polling mode.",
+    "status": "info"
+  },
+  {
+    "id": "kij5x4c",
+    "timestamp": 1789143903092,
+    "chatId": 0,
+    "username": "system",
+    "type": "system",
+    "text": "Bot initialized in Webhook mode. Active URL: https://daily-thirukkural-telegram-bot-companion.ai.studio/api/telegram-webhook",
+    "status": "info"
+  }
+]
