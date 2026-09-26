@@ -1,8 +1,31 @@
+# Dependencies and build outputs
 node_modules/
 build/
 dist/
 coverage/
 .DS_Store
 *.log
+
+# Environment variables & secrets
 .env*
 !.env.example
+.dev.env.json
+
+# Firebase configuration with API keys
+firebase-applet-config.json
+!firebase-applet-config.example.json
+serviceAccountKey*.json
+*.pem
+*.key
+*.cert
+
+# Runtime data & private subscriber records
+data/admin_auth.json
+data/bot_users*.json
+data/bot_logs*.json
+data/bot_status.json
+data/migration_report.json
+
+# Explicitly track static kurals database
+!data/kurals_all.json
+
