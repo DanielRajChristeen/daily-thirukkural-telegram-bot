@@ -1,0 +1,149 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Thirukkural bot subscriber profile and delivery preferences",
+      "type": "object",
+      "properties": {
+        "chatId": {
+          "type": "number",
+          "description": "Telegram user chat ID"
+        },
+        "username": {
+          "type": "string",
+          "description": "Telegram handle or username"
+        },
+        "firstName": {
+          "type": "string",
+          "description": "Telegram user first name"
+        },
+        "language": {
+          "type": "string",
+          "enum": ["tamil", "english", "both"],
+          "description": "Preferred language for couplets"
+        },
+        "triggerTime": {
+          "type": "string",
+          "description": "Daily scheduled reminder time (e.g. 06:00:AM or none)"
+        },
+        "lastActive": {
+          "type": "number",
+          "description": "Timestamp of last interaction"
+        }
+      },
+      "required": ["chatId", "language", "triggerTime"]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "Audit and event log for Telegram bot gateway activities",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique log record ID"
+        },
+        "timestamp": {
+          "type": "number",
+          "description": "Event timestamp in milliseconds"
+        },
+        "chatId": {
+          "type": "number",
+          "description": "Associated Telegram chat ID"
+        },
+        "username": {
+          "type": "string",
+          "description": "Associated username or system actor"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["incoming", "outgoing", "system"],
+          "description": "Type of message or event"
+        },
+        "text": {
+          "type": "string",
+          "description": "Message or status payload"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["success", "info", "error"],
+          "description": "Operational outcome status"
+        }
+      },
+      "required": ["id", "timestamp", "type", "text"]
+    },
+    "ReminderDelivery": {
+      "title": "ReminderDelivery",
+      "description": "Idempotent delivery record tracking scheduled Kurals sent to subscribers",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique key composed of YYYY-MM-DD_chatId_triggerTime"
+        },
+        "date": {
+          "type": "string",
+          "description": "Delivery date string in YYYY-MM-DD format"
+        },
+        "chatId": {
+          "type": "number",
+          "description": "Telegram user chat ID"
+        },
+        "triggerTime": {
+          "type": "string",
+          "description": "Scheduled trigger time string"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["CLAIMED", "DELIVERED", "FAILED"],
+          "description": "Delivery commitment state"
+        },
+        "claimedAt": {
+          "type": "number",
+          "description": "Timestamp when delivery was atomically claimed"
+        },
+        "deliveredAt": {
+          "type": "number",
+          "description": "Timestamp when Telegram API confirmed delivery"
+        },
+        "lastAttemptAt": {
+          "type": "number",
+          "description": "Timestamp of most recent delivery attempt"
+        },
+        "attempts": {
+          "type": "number",
+          "description": "Number of dispatch attempts"
+        },
+        "kuralNumber": {
+          "type": "number",
+          "description": "Thirukkural number delivered"
+        },
+        "lastError": {
+          "type": "string",
+          "description": "Error details if Telegram API send rejected"
+        }
+      },
+      "required": ["id", "date", "chatId", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{chatId}": {
+      "schema": {
+        "$ref": "#/entities/User"
+      },
+      "description": "Collection of bot subscribers keyed by Telegram chatId"
+    },
+    "/activity_logs/{logId}": {
+      "schema": {
+        "$ref": "#/entities/ActivityLog"
+      },
+      "description": "Historical audit and gateway interaction logs"
+    },
+    "/reminder_deliveries/{deliveryId}": {
+      "schema": {
+        "$ref": "#/entities/ReminderDelivery"
+      },
+      "description": "Idempotent reminder delivery receipts preventing duplicate sends"
+    }
+  }
+}

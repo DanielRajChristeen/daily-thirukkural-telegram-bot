@@ -6,19 +6,22 @@ import {
   Activity, 
   TrendingUp, 
   CheckCircle2, 
+  AlertTriangle,
   HelpCircle,
   BookOpen,
   RefreshCw
 } from 'lucide-react';
-import { AdminStats } from '../types';
+import { AdminStats, TelegramBotState } from '../types';
 
 interface AnalyticsHubProps {
   stats: AdminStats | null;
   loading: boolean;
   onRefresh: () => void;
+  botState?: TelegramBotState | null;
+  isBotStopped?: boolean;
 }
 
-export default function AnalyticsHub({ stats, loading, onRefresh }: AnalyticsHubProps) {
+export default function AnalyticsHub({ stats, loading, onRefresh, botState, isBotStopped }: AnalyticsHubProps) {
   if (loading && !stats) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-4 bg-white border border-slate-200 rounded-3xl">
@@ -50,6 +53,33 @@ export default function AnalyticsHub({ stats, loading, onRefresh }: AnalyticsHub
   const activeSchedulers = Math.max(0, s.totalUsers - offCount);
   const hasReminders = Object.keys(s.reminders).length > 0;
 
+  // True dynamic engine health based on live telemetry
+  let healthLabel = "100% OPERATIONAL";
+  let healthColor = "text-emerald-800";
+  let healthSub = "Bot engine running & connected";
+  let HealthIcon = CheckCircle2;
+  let iconColor = "text-emerald-500";
+
+  if (isBotStopped) {
+    healthLabel = "SERVICE PAUSED";
+    healthColor = "text-amber-800";
+    healthSub = "Bot triggers & poller paused";
+    HealthIcon = HelpCircle;
+    iconColor = "text-amber-500";
+  } else if (botState && !botState.isConnected) {
+    healthLabel = "DISCONNECTED";
+    healthColor = "text-rose-700";
+    healthSub = botState.lastErrorMessage ? botState.lastErrorMessage.substring(0, 36) : "Unable to reach Telegram API";
+    HealthIcon = AlertTriangle;
+    iconColor = "text-rose-500";
+  } else if (botState && botState.consecutiveErrors > 0) {
+    healthLabel = "DEGRADED";
+    healthColor = "text-amber-700";
+    healthSub = `${botState.consecutiveErrors} consecutive network errors`;
+    HealthIcon = AlertTriangle;
+    iconColor = "text-amber-500";
+  }
+
   return (
     <div className="flex flex-col gap-6" id="analytics_hub">
       {/* SECTION 1: POLISHED TELEMETRY OVERVIEW CARDS */}
@@ -64,7 +94,7 @@ export default function AnalyticsHub({ stats, loading, onRefresh }: AnalyticsHub
           <div className="flex items-baseline gap-2 mt-2">
             <span className="text-3xl font-extrabold text-slate-900 font-mono">{s.totalUsers}</span>
             <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded flex items-center gap-0.5">
-              <TrendingUp size={10} /> +100%
+              <TrendingUp size={10} /> Active
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-2">Unique Chat IDs registered in system</p>
@@ -97,19 +127,19 @@ export default function AnalyticsHub({ stats, loading, onRefresh }: AnalyticsHub
             </span>
             <span className="text-xs text-slate-400">/ {s.totalUsers} users</span>
           </div>
-          <p className="text-xs text-slate-500 mt-2">Users scheduled for daily couplest delivery</p>
+          <p className="text-xs text-slate-500 mt-2">Users scheduled for daily couplets delivery</p>
         </div>
 
         {/* Core Bot Engine Status Card */}
         <div className="bg-white border border-slate-200 hover:border-slate-300 transition-all rounded-2xl p-5 shadow-xs relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-16 h-16 bg-slate-50 rounded-bl-full flex items-center justify-center border-l border-b border-slate-100 group-hover:bg-slate-100/75 transition-colors">
-            <CheckCircle2 size={18} className="text-emerald-500" />
+            <HealthIcon size={18} className={iconColor} />
           </div>
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Engine Health</p>
           <div className="flex items-baseline gap-2 mt-2">
-            <span className="text-lg font-bold text-emerald-800">100% OPERATIONAL</span>
+            <span className={`text-lg font-bold ${healthColor}`}>{healthLabel}</span>
           </div>
-          <p className="text-xs text-slate-500 mt-3.5">Server container active and responding</p>
+          <p className="text-xs text-slate-500 mt-3.5 truncate" title={healthSub}>{healthSub}</p>
         </div>
       </div>
 

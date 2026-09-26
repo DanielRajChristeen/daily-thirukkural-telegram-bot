@@ -41,14 +41,14 @@ export default function UserManager({ users, onDeleteUser, onUpdateUser, onRefre
     return () => window.removeEventListener('message', handleMessage);
   }, [onRefresh]);
 
-  // Convert "HH:MM:AM/PM" to "HH:MM" (24h)
+  // Convert "HH:MM AM/PM" or "HH:MM:AM/PM" to "HH:MM" (24h)
   const to24h = (triggerTime: string): string => {
     if (!triggerTime || triggerTime === 'none') return '07:00';
-    const parts = triggerTime.split(':');
-    if (parts.length >= 3) {
-      let h = parseInt(parts[0], 10) || 7;
-      const m = parts[1] || '00';
-      const ap = (parts[2] || 'AM').toUpperCase();
+    const match = triggerTime.trim().match(/^(\d{1,2}):(\d{2})(?::|\s+)?(AM|PM)?$/i);
+    if (match) {
+      let h = parseInt(match[1], 10);
+      const m = match[2];
+      const ap = (match[3] || 'AM').toUpperCase();
       if (ap === 'PM' && h < 12) h += 12;
       if (ap === 'AM' && h === 12) h = 0;
       return `${String(h).padStart(2, '0')}:${m}`;
@@ -56,7 +56,7 @@ export default function UserManager({ users, onDeleteUser, onUpdateUser, onRefre
     return '07:00';
   };
 
-  // Convert "HH:MM" (24h) to "HH:MM:AM/PM"
+  // Convert "HH:MM" (24h) to "HH:MM AM/PM"
   const to12h = (time24: string): string => {
     if (!time24) return 'none';
     const [hStr, mStr] = time24.split(':');
@@ -65,7 +65,7 @@ export default function UserManager({ users, onDeleteUser, onUpdateUser, onRefre
     const ap = h >= 12 ? 'PM' : 'AM';
     h = h % 12;
     if (h === 0) h = 12;
-    return `${String(h).padStart(2, '0')}:${m}:${ap}`;
+    return `${String(h).padStart(2, '0')}:${m} ${ap}`;
   };
 
   const handleStartEdit = (user: BotUser) => {

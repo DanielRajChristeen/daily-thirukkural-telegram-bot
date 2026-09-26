@@ -6,23 +6,35 @@ import {
   getAllUsers, 
   getUser, 
   saveUser, 
+  saveUserAsync,
   deleteUser, 
+  deleteUserAsync,
   getActivityLogs, 
   clearActivityLogs, 
   addActivityLog,
   verifyAdminLogin,
-  changeAdminPassword
+  changeAdminPassword,
+  getDbHealthStatus,
+  initDatabase,
+  getSchedulerTelemetry,
+  getSystemGatewayConfig,
+  saveSystemGatewayConfig
 } from './src/server/db';
 import { 
   handleBotMessage, 
   handleBotCallback, 
   startRealTelegramBot, 
+  reconnectTelegramBot,
+  getTelegramBotState,
   startReminderScheduler,
+  processScheduledRemindersTick,
+  opportunisticReminderCheck,
   isBotServiceStopped,
   stopBotService,
   startBotService,
   handleTelegramUpdate,
-  setAppUrl
+  setAppUrl,
+  validateSchedulerAuth
 } from './src/server/bot';
 import { renderFlaskTimePickerHtml } from './src/server/flaskTimePickerUi';
 
@@ -35,6 +47,23 @@ async function startServer() {
 
   // Support JSON bodies for API calls
   app.use(express.json());
+
+  // CORS and iframe embedding headers for all environments
+  app.use((req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(204);
+    }
+    // Prevent stale caching of API responses
+    if (req.path.startsWith('/api/')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
+    next();
+  });
 
   // Track active base URL for Telegram WebApp and links
   app.use((req, res, next) => {
@@ -92,7 +121,7 @@ async function startServer() {
   });
 
   // API Route: Update or create a user in simulator
-  app.post('/api/users/update', (req, res) => {
+  app.post('/api/users/update', async (req, res) => {
     const { chatId, language, triggerTime, username, firstName } = req.body;
     if (!chatId) {
       return res.status(400).json({ error: 'chatId is required.' });
@@ -104,7 +133,7 @@ async function startServer() {
       if (username !== undefined) updatePayload.username = username;
       if (firstName !== undefined) updatePayload.firstName = firstName;
 
-      const user = saveUser(chatId, updatePayload);
+      const user = await saveUserAsync(chatId, updatePayload);
       res.json(user);
     } catch (err) {
       res.status(500).json({ error: 'Failed to update user.' });
@@ -112,13 +141,13 @@ async function startServer() {
   });
 
   // API Route: Delete / Reset a user from companion dashboard
-  app.post('/api/users/delete/:chatId', (req, res) => {
+  app.post('/api/users/delete/:chatId', async (req, res) => {
     const chatId = parseInt(req.params.chatId, 10);
     if (isNaN(chatId)) {
       return res.status(400).json({ error: 'Invalid chatId.' });
     }
     try {
-      const success = deleteUser(chatId);
+      const success = await deleteUserAsync(chatId);
       res.json({ success });
     } catch (err) {
       res.status(500).json({ error: 'Failed to delete user.' });
@@ -132,42 +161,222 @@ async function startServer() {
       if (!token) {
         return res.status(500).json({ error: 'TELEGRAM_BOT_TOKEN is not configured' });
       }
+
+      // Validate Telegram secret token if configured
+      const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+      if (expectedSecret && expectedSecret.trim() !== '') {
+        const receivedSecret = req.headers['x-telegram-bot-api-secret-token'];
+        if (receivedSecret !== expectedSecret) {
+          console.warn("⚠️ Rejected telegram webhook update: X-Telegram-Bot-Api-Secret-Token mismatch.");
+          return res.status(403).json({ error: 'Forbidden: Invalid secret token' });
+        }
+      }
       
-      // Process update asynchronously
-      await handleTelegramUpdate(token, req.body);
+      // Send 200 OK immediately and process update asynchronously to avoid Telegram timeouts
       res.sendStatus(200);
+
+      handleTelegramUpdate(token, req.body).catch(err => {
+        console.error('Error handling Telegram webhook update:', err);
+      });
+
+      // Opportunistically check if any reminder is due while the instance is awake
+      opportunisticReminderCheck(token).catch(() => {});
     } catch (err) {
       console.error('Error in telegram-webhook endpoint:', err);
       res.sendStatus(500);
     }
   });
 
-  // API Route: Get Webhook Info
-  app.get('/api/webhook-status', async (req, res) => {
+  // Helper to validate scheduler secret if configured
+  const checkSchedulerRequestAuth = (req: express.Request): boolean => {
+    const querySecret = typeof req.query.secret === 'string' ? req.query.secret : undefined;
+    const bodySecret = req.body && typeof req.body.secret === 'string' ? req.body.secret : undefined;
+    return validateSchedulerAuth(req.headers, querySecret || bodySecret);
+  };
+
+  // API Route: Daily Initialization Endpoint (Lightweight, idempotent daily wake-up)
+  app.all(['/api/scheduler/daily-init', '/api/scheduler/init'], async (req, res) => {
     try {
-      const token = process.env.TELEGRAM_BOT_TOKEN;
-      if (!token || token === 'MY_TELEGRAM_BOT_TOKEN') {
-        return res.json({ hasToken: false, webhookActive: false });
+      if (!checkSchedulerRequestAuth(req)) {
+        console.warn("⚠️ Unauthorized attempt to call scheduler daily-init: Secret mismatch.");
+        return res.status(401).json({ success: false, error: 'Unauthorized: Invalid or missing X-Scheduler-Secret' });
       }
 
-      const response = await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`);
-      const data: any = await response.json();
-      
+      const token = process.env.TELEGRAM_BOT_TOKEN;
+      const result = await processScheduledRemindersTick(token, undefined, 'daily_init');
       res.json({
-        hasToken: true,
-        webhookActive: data.ok && !!data.result.url,
-        url: data.ok ? data.result.url : '',
-        pendingUpdateCount: data.ok ? data.result.pending_update_count : 0,
-        lastErrorDate: data.ok ? data.result.last_error_date : null,
-        lastErrorMessage: data.ok ? data.result.last_error_message : ''
+        success: true,
+        message: 'Daily scheduler initialized successfully',
+        timeString: result.timeString,
+        dateString: result.dateString,
+        uptimeSeconds: Math.floor(process.uptime()),
+        evaluatedCount: result.evaluatedCount,
+        dueCount: result.dueCount,
+        deliveredCount: result.deliveredCount,
+        skippedCount: result.skippedCount
       });
-    } catch (err) {
-      console.error('Error getting webhook info:', err);
-      res.status(500).json({ error: 'Failed to fetch webhook info from Telegram' });
+    } catch (err: any) {
+      console.error("Error executing daily-init:", err);
+      res.status(500).json({ success: false, error: err?.message || 'Daily-init execution failed' });
     }
   });
 
-  // API Route: Set Webhook
+  // API Route: Scheduler Tick Endpoint (Supports GET & POST for external cron/pingers)
+  app.all('/api/scheduler/tick', async (req, res) => {
+    try {
+      if (!checkSchedulerRequestAuth(req)) {
+        console.warn("⚠️ Unauthorized attempt to trigger scheduler tick: Secret mismatch.");
+        return res.status(401).json({ success: false, error: 'Unauthorized: Invalid or missing X-Scheduler-Secret' });
+      }
+
+      const token = process.env.TELEGRAM_BOT_TOKEN;
+      const customTime = (req.query.time as string) || (req.body && req.body.time as string) || undefined;
+      const source = (req.headers['user-agent']?.includes('Google-Cloud-Scheduler') ? 'cloud_scheduler' : 'external_trigger') as string;
+
+      const result = await processScheduledRemindersTick(token, customTime, source);
+      console.log(`⏱️ Scheduler tick: current IST time = ${result.timeString}, evaluated = ${result.evaluatedCount}, normal matches = ${result.normalMatchesCount}, catch-up matches = ${result.catchUpMatchesCount}, claimed = ${result.claimedCount}, delivered = ${result.deliveredCount}, skipped = ${result.skippedCount}`);
+      
+      // Concise, sanitized JSON response avoiding any credential or subscriber data leakage
+      res.json({
+        success: true,
+        timeString: result.timeString,
+        dateString: result.dateString,
+        source: result.source,
+        evaluatedCount: result.evaluatedCount,
+        processedCount: result.evaluatedCount,
+        dueCount: result.dueCount,
+        normalMatchesCount: result.normalMatchesCount,
+        catchUpMatchesCount: result.catchUpMatchesCount,
+        claimedCount: result.claimedCount,
+        deliveredCount: result.deliveredCount,
+        failedCount: result.failedCount,
+        skippedCount: result.skippedCount
+      });
+    } catch (err: any) {
+      console.error("Error executing scheduler tick:", err);
+      res.status(500).json({ success: false, error: err?.message || 'Scheduler tick execution failed' });
+    }
+  });
+
+  // API Route: Scheduler Status Telemetry
+  app.get('/api/scheduler/status', (req, res) => {
+    const host = req.headers['x-forwarded-host'] || req.get('host');
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+    const baseUrl = process.env.PUBLIC_APP_URL || `${protocol}://${host}`;
+    const endpointUrl = `${baseUrl.replace(/\/$/, '')}/api/scheduler/tick`;
+    const isSecretConfigured = !!(process.env.SCHEDULER_SECRET && process.env.SCHEDULER_SECRET.trim() !== '');
+
+    const telemetry = getSchedulerTelemetry(endpointUrl, isSecretConfigured);
+    res.json(telemetry);
+  });
+
+  // API Route: Get Webhook Info & Connection Diagnostics
+  app.get('/api/webhook-status', async (req, res) => {
+    const host = req.headers['x-forwarded-host'] || req.get('host');
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+    const baseUrl = process.env.PUBLIC_APP_URL || `${protocol}://${host}`;
+    const schedulerEndpointUrl = `${baseUrl.replace(/\/$/, '')}/api/scheduler/tick`;
+    const isSecretConfigured = !!(process.env.SCHEDULER_SECRET && process.env.SCHEDULER_SECRET.trim() !== '');
+    const isWebhookSecretConfigured = !!(process.env.TELEGRAM_WEBHOOK_SECRET && process.env.TELEGRAM_WEBHOOK_SECRET.trim() !== '');
+
+    const schedulerStatus = getSchedulerTelemetry(schedulerEndpointUrl, isSecretConfigured);
+
+    try {
+      const token = process.env.TELEGRAM_BOT_TOKEN;
+      if (!token || token === 'MY_TELEGRAM_BOT_TOKEN') {
+        return res.json({ 
+          hasToken: false, 
+          webhookActive: false, 
+          url: '',
+          pendingUpdateCount: 0,
+          botState: getTelegramBotState(),
+          dbHealth: getDbHealthStatus(),
+          schedulerStatus,
+          isWebhookSecretConfigured,
+          productionServiceUrl: process.env.PUBLIC_APP_URL || undefined
+        });
+      }
+
+      let data: any = { ok: false };
+      try {
+        const response = await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`, {
+          signal: AbortSignal.timeout(8000)
+        });
+        data = await response.json();
+      } catch (fetchErr: any) {
+        console.warn("Could not reach Telegram getWebhookInfo:", fetchErr?.message || fetchErr);
+      }
+
+      const botState = getTelegramBotState();
+      const dbHealth = getDbHealthStatus();
+      
+      res.json({
+        hasToken: true,
+        webhookActive: data.ok && !!data.result?.url,
+        url: data.ok && data.result?.url ? data.result.url : '',
+        pendingUpdateCount: data.ok && data.result?.pending_update_count ? data.result.pending_update_count : 0,
+        lastErrorDate: data.ok ? data.result?.last_error_date : null,
+        lastErrorMessage: data.ok ? (data.result?.last_error_message || '') : '',
+        botState,
+        dbHealth,
+        schedulerStatus,
+        isWebhookSecretConfigured,
+        productionServiceUrl: process.env.PUBLIC_APP_URL || (data.ok && data.result?.url ? data.result.url : undefined)
+      });
+    } catch (err) {
+      console.error('Error getting webhook info:', err);
+      res.json({ 
+        hasToken: true, 
+        webhookActive: false, 
+        url: '', 
+        pendingUpdateCount: 0,
+        botState: getTelegramBotState(),
+        dbHealth: getDbHealthStatus(),
+        schedulerStatus,
+        isWebhookSecretConfigured,
+        productionServiceUrl: process.env.PUBLIC_APP_URL || undefined,
+        lastErrorMessage: 'Transient network delay querying Telegram API'
+      });
+    }
+  });
+
+  // API Route: Bot Diagnostics & Database Health
+  app.get('/api/bot/diagnostics', async (req, res) => {
+    try {
+      const token = process.env.TELEGRAM_BOT_TOKEN;
+      const hasToken = !!(token && token !== 'MY_TELEGRAM_BOT_TOKEN' && token.trim() !== '');
+      const botState = getTelegramBotState();
+      const dbHealth = getDbHealthStatus();
+
+      res.json({
+        hasToken,
+        botState,
+        dbHealth,
+        uptimeSeconds: Math.floor(process.uptime()),
+        timestamp: Date.now()
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Failed to gather diagnostics.' });
+    }
+  });
+
+  // API Route: Reconnect Telegram Bot on demand
+  app.post('/api/bot/reconnect', async (req, res) => {
+    try {
+      const token = process.env.TELEGRAM_BOT_TOKEN;
+      if (!token || token === 'MY_TELEGRAM_BOT_TOKEN') {
+        return res.status(400).json({ success: false, message: 'TELEGRAM_BOT_TOKEN is not configured in secrets.' });
+      }
+
+      const result = await reconnectTelegramBot(token);
+      res.json(result);
+    } catch (err: any) {
+      console.error("Error during manual bot reconnection:", err);
+      res.status(500).json({ success: false, message: err?.message || 'Reconnection attempt failed.' });
+    }
+  });
+
+  // API Route: Set Webhook (Explicit Administrative Operation)
   app.post('/api/webhook-setup', async (req, res) => {
     try {
       const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -176,7 +385,7 @@ async function startServer() {
       }
 
       // Determine webhook URL. If none is supplied, we construct it from host header
-      let webhookUrl = req.body.url;
+      let webhookUrl = req.body.url || process.env.PUBLIC_APP_URL || process.env.TELEGRAM_WEBHOOK_URL;
       if (!webhookUrl) {
         const host = req.headers['x-forwarded-host'] || req.get('host');
         const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
@@ -188,11 +397,27 @@ async function startServer() {
         webhookUrl = `${webhookUrl.replace(/\/$/, '')}/api/telegram-webhook`;
       }
 
+      const secretToken = req.body.secretToken || process.env.TELEGRAM_WEBHOOK_SECRET;
+
       console.log(`🔗 Registering Telegram Webhook with URL: ${webhookUrl}`);
-      const response = await fetch(`https://api.telegram.org/bot${token}/setWebhook?url=${webhookUrl}&drop_pending_updates=true`);
+      const setBody: any = {
+        url: webhookUrl,
+        drop_pending_updates: false
+      };
+      if (secretToken) {
+        setBody.secret_token = secretToken;
+      }
+
+      const response = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(setBody),
+        signal: AbortSignal.timeout(15000)
+      });
       const data: any = await response.json();
 
       if (data.ok) {
+        await saveSystemGatewayConfig(webhookUrl, secretToken);
         addActivityLog(0, 'system', 'system', `Registered webhook URL: ${webhookUrl}`, 'success');
         res.json({ success: true, message: 'Webhook successfully registered!', url: webhookUrl });
       } else {
@@ -204,7 +429,7 @@ async function startServer() {
     }
   });
 
-  // API Route: Delete Webhook (turns back to polling/offline)
+  // API Route: Delete Webhook (Explicit Administrative Operation)
   app.post('/api/webhook-delete', async (req, res) => {
     try {
       const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -212,14 +437,15 @@ async function startServer() {
         return res.status(400).json({ error: 'Telegram Token is missing.' });
       }
 
-      const response = await fetch(`https://api.telegram.org/bot${token}/deleteWebhook?drop_pending_updates=true`);
+      const response = await fetch(`https://api.telegram.org/bot${token}/deleteWebhook?drop_pending_updates=false`);
       const data: any = await response.json();
 
       if (data.ok) {
-        addActivityLog(0, 'system', 'system', `Deleted webhook registration`, 'info');
-        // Restart the polling bot loop since the webhook was deleted
+        await saveSystemGatewayConfig(undefined, undefined);
+        addActivityLog(0, 'system', 'system', `Deleted webhook registration by administrative action`, 'info');
+        // Restart the fallback polling bot loop since the webhook was intentionally removed
         startRealTelegramBot(token);
-        res.json({ success: true, message: 'Webhook removed. Long-polling/Simulated mode restored.' });
+        res.json({ success: true, message: 'Webhook removed. Local fallback polling mode restored.' });
       } else {
         res.status(400).json({ error: data.description || 'Telegram failed to delete webhook' });
       }
@@ -473,7 +699,7 @@ async function startServer() {
       if (callbackData) {
         // Handle inline button click simulation
         console.log(`[Simulator] Callback query from ${chatId}: "${callbackData}"`);
-        const response = await handleBotCallback(chatId, callbackData);
+        const response = await handleBotCallback(chatId, callbackData, username, firstName);
         res.json({ response });
       } else {
         // Handle text message simulation
@@ -487,11 +713,18 @@ async function startServer() {
     }
   });
 
+  // Initialize Cloud Firestore Database (Authoritative Source of Truth)
+  try {
+    await initDatabase();
+  } catch (dbInitErr) {
+    console.error("Critical error during database initialization:", dbInitErr);
+  }
+
   // Initialize Real Telegram Bot if Token is provided
   const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
   const hasToken = TOKEN && TOKEN !== 'MY_TELEGRAM_BOT_TOKEN' && TOKEN.trim() !== '';
 
-  // Start the daily reminder scheduler unconditionally
+  // Start the daily reminder scheduler unconditionally with Firestore subscribers
   startReminderScheduler(hasToken ? TOKEN : undefined);
 
   if (hasToken) {
@@ -517,6 +750,14 @@ async function startServer() {
     res.removeHeader('X-Frame-Options');
     res.setHeader('Content-Security-Policy', "frame-ancestors *");
     res.send(html);
+  });
+
+  // API catch-all: protect unmatched API endpoints from falling through to the SPA index.html
+  app.all('/api/*', (req, res) => {
+    res.status(404).json({
+      success: false,
+      error: `API route not found: ${req.method} ${req.path}`
+    });
   });
 
   // Vite middleware for dev mode, static folder for production

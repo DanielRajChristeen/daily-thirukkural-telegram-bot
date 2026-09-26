@@ -1,6 +1,21 @@
 import { kurals, Kural } from '../kurals';
 import { chapters } from '../chapters';
-import { getUser, saveUser, getAllUsers, BotUser, addActivityLog } from './db';
+import { 
+  getUser, 
+  saveUser, 
+  getAllUsers, 
+  BotUser, 
+  addActivityLog,
+  claimReminderDeliveryAtomic,
+  markReminderDelivered,
+  markReminderFailed,
+  recordSchedulerTick,
+  getSystemGatewayConfig,
+  saveSystemGatewayConfig,
+  parseTimeMinutes,
+  setSchedulerLifecycleState,
+  recordSchedulerHeartbeat
+} from './db';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -200,7 +215,7 @@ export function parseCustomTimeString(input: string): string | null {
     if (hour >= 1 && hour <= 12 && minute >= 0 && minute <= 59) {
       const hourStr = String(hour).padStart(2, '0');
       const minStr = String(minute).padStart(2, '0');
-      return `${hourStr}:${minStr}:${ampm}`;
+      return `${hourStr}:${minStr} ${ampm}`;
     }
   }
 
@@ -216,7 +231,7 @@ export function parseCustomTimeString(input: string): string | null {
       if (hour12 === 0) hour12 = 12;
       const hourStr = String(hour12).padStart(2, '0');
       const minStr = String(minute).padStart(2, '0');
-      return `${hourStr}:${minStr}:${ampm}`;
+      return `${hourStr}:${minStr} ${ampm}`;
     }
   }
 
@@ -227,7 +242,7 @@ export function parseCustomTimeString(input: string): string | null {
     const ampm = matchHourOnly[2];
     if (hour >= 1 && hour <= 12) {
       const hourStr = String(hour).padStart(2, '0');
-      return `${hourStr}:00:${ampm}`;
+      return `${hourStr}:00 ${ampm}`;
     }
   }
 
@@ -405,7 +420,7 @@ export async function handleBotMessage(
   const directParsed = parseCustomTimeString(trimmed);
   if (directParsed) {
     if (directParsed === 'none') {
-      saveUser(chatId, { triggerTime: 'none' });
+      saveUser(chatId, { triggerTime: 'none', username, firstName });
       return {
         text: `✅ <b>Reminders turned OFF / நினைவூட்டல் நிறுத்தப்பட்டது!</b>\n\nAutomatic daily reminders are now disabled. You can set a customized time anytime with <code>/time</code>.`,
         replyMarkup: {
@@ -416,7 +431,7 @@ export async function handleBotMessage(
         }
       };
     } else {
-      saveUser(chatId, { triggerTime: directParsed });
+      saveUser(chatId, { triggerTime: directParsed, username, firstName });
       return {
         text: `✅ <b>Custom Reminder Set / நினைவூட்டல் குறிக்கப்பட்டது!</b>\n\nI will send you a daily couplet every day at your exact customized time:\n⏰ <b>${formatTimeDisplay(directParsed)} (IST)</b>\n\n<i>Type /time anytime to change your customized schedule!</i>`,
         replyMarkup: {
@@ -437,13 +452,13 @@ export async function handleBotMessage(
       const parsed = parseCustomTimeString(timeArg);
       if (parsed) {
         if (parsed === 'none') {
-          saveUser(chatId, { triggerTime: 'none' });
+          saveUser(chatId, { triggerTime: 'none', username, firstName });
           return {
             text: `✅ <b>Reminders turned OFF / நினைவூட்டல் நிறுத்தப்பட்டது!</b>\n\nAutomatic daily reminders are now disabled.`,
             replyMarkup: { inline_keyboard: [[{ text: "↩️ Back to Menu", callback_data: "btn_menu" }]] }
           };
         } else {
-          saveUser(chatId, { triggerTime: parsed });
+          saveUser(chatId, { triggerTime: parsed, username, firstName });
           return {
             text: `✅ <b>Custom Reminder Set / நினைவூட்டல் குறிக்கப்பட்டது!</b>\n\nI will send you a daily couplet every day at your customized time:\n⏰ <b>${formatTimeDisplay(parsed)} (IST)</b>`,
             replyMarkup: { inline_keyboard: [[{ text: "↩️ Back to Menu", callback_data: "btn_menu" }]] }
@@ -463,6 +478,59 @@ export async function handleBotMessage(
         replyMarkup: getCustomReminderMenuMarkup(user.triggerTime, draft, chatId)
       };
     }
+  }
+
+  // 3. Handle /lang, /language commands and direct language input
+  if (trimmed.startsWith('/lang') || trimmed.startsWith('/language')) {
+    const parts = trimmed.split(/\s+/);
+    if (parts.length > 1) {
+      const choice = parts[1].toLowerCase();
+      if (['tamil', 'tam', 'ta', 'தமிழ்'].includes(choice)) {
+        saveUser(chatId, { language: 'tamil', username, firstName });
+        return {
+          text: `✅ <b>Language Set / மொழி தேர்வு செய்யப்பட்டது!</b>\n\nFrom now on, I will display Kurals and explanations in <b>Tamil</b> 🪔`,
+          replyMarkup: getLanguageMenuMarkup('tamil')
+        };
+      } else if (['english', 'eng', 'en'].includes(choice)) {
+        saveUser(chatId, { language: 'english', username, firstName });
+        return {
+          text: `✅ <b>Language Set / மொழி தேர்வு செய்யப்பட்டது!</b>\n\nFrom now on, I will display Kurals and translations in <b>English</b> 🇬🇧`,
+          replyMarkup: getLanguageMenuMarkup('english')
+        };
+      } else if (['both', 'all', 'iru', 'இருமொழியும்'].includes(choice)) {
+        saveUser(chatId, { language: 'both', username, firstName });
+        return {
+          text: `✅ <b>Language Set / மொழி தேர்வு செய்யப்பட்டது!</b>\n\nFrom now on, I will display Kurals and details in <b>Both Tamil and English</b> 🌐`,
+          replyMarkup: getLanguageMenuMarkup('both')
+        };
+      }
+    }
+    return {
+      text: `🌐 <b>Select Your Preferred Language / மொழியைத் தேர்ந்தெடுக்கவும்:</b>\n\nCurrent Preference: <b>${(user.language || 'both').toUpperCase()}</b>`,
+      replyMarkup: getLanguageMenuMarkup(user.language || 'both')
+    };
+  }
+
+  if (trimmed.toLowerCase() === 'tamil' || trimmed.toLowerCase() === 'தமிழ்') {
+    saveUser(chatId, { language: 'tamil', username, firstName });
+    return {
+      text: `✅ <b>Language Set / மொழி தேர்வு செய்யப்பட்டது!</b>\n\nFrom now on, I will display Kurals and explanations in <b>Tamil</b> 🪔`,
+      replyMarkup: getLanguageMenuMarkup('tamil')
+    };
+  }
+  if (trimmed.toLowerCase() === 'english') {
+    saveUser(chatId, { language: 'english', username, firstName });
+    return {
+      text: `✅ <b>Language Set / மொழி தேர்வு செய்யப்பட்டது!</b>\n\nFrom now on, I will display Kurals and translations in <b>English</b> 🇬🇧`,
+      replyMarkup: getLanguageMenuMarkup('english')
+    };
+  }
+  if (trimmed.toLowerCase() === 'both' || trimmed.toLowerCase() === 'இருமொழியும்') {
+    saveUser(chatId, { language: 'both', username, firstName });
+    return {
+      text: `✅ <b>Language Set / மொழி தேர்வு செய்யப்பட்டது!</b>\n\nFrom now on, I will display Kurals and details in <b>Both Tamil and English</b> 🌐`,
+      replyMarkup: getLanguageMenuMarkup('both')
+    };
   }
 
   // 1. Handle commands
@@ -604,8 +672,13 @@ async function triggerRandomKural(user: BotUser): Promise<BotResponse> {
 }
 
 // Unified button click / callback handler
-export async function handleBotCallback(chatId: number, callbackData: string): Promise<BotResponse> {
-  const user = getUser(chatId);
+export async function handleBotCallback(
+  chatId: number, 
+  callbackData: string,
+  username?: string,
+  firstName?: string
+): Promise<BotResponse> {
+  const user = getUser(chatId, { username, firstName });
   if (!user.language) user.language = 'both';
   if (!user.triggerTime) user.triggerTime = '06:00:AM';
 
@@ -717,13 +790,13 @@ export async function handleBotCallback(chatId: number, callbackData: string): P
   if (callbackData.startsWith('set_custom_') || callbackData.startsWith('set_time_')) {
     const time = callbackData.replace('set_custom_', '').replace('set_time_', '');
     if (time === 'none') {
-      saveUser(chatId, { triggerTime: 'none' });
+      saveUser(chatId, { triggerTime: 'none', username, firstName });
       return {
         text: `✅ <b>Reminders turned OFF / நினைவூட்டல் நிறுத்தப்பட்டது!</b>\n\nAutomatic daily reminders are now disabled. You can still fetch couplets manually with /daily or /random.`,
         replyMarkup: getCustomReminderMenuMarkup('none', '07:00:AM', chatId)
       };
     } else {
-      saveUser(chatId, { triggerTime: time });
+      saveUser(chatId, { triggerTime: time, username, firstName });
       return {
         text: `✅ <b>Custom Reminder Set / நினைவூட்டல் குறிக்கப்பட்டது!</b>\n\nI will send you a daily couplet every day at your exact customized time:\n⏰ <b>${formatTimeDisplay(time)} (IST)</b>\n\n<i>You can re-adjust anytime using /time or the menu!</i>`,
         replyMarkup: getCustomReminderMenuMarkup(time, time, chatId)
@@ -796,21 +869,21 @@ export async function handleBotCallback(chatId: number, callbackData: string): P
     }
 
     case 'set_lang_tamil':
-      saveUser(chatId, { language: 'tamil' });
+      saveUser(chatId, { language: 'tamil', username, firstName });
       return {
         text: `✅ <b>Language Set / மொழி தேர்வு செய்யப்பட்டது!</b>\n\nFrom now on, I will display Kurals and explanations in <b>Tamil</b> 🪔`,
         replyMarkup: getLanguageMenuMarkup('tamil')
       };
 
     case 'set_lang_english':
-      saveUser(chatId, { language: 'english' });
+      saveUser(chatId, { language: 'english', username, firstName });
       return {
         text: `✅ <b>Language Set / மொழி தேர்வு செய்யப்பட்டது!</b>\n\nFrom now on, I will display Kurals and translations in <b>English</b> 🇬🇧`,
         replyMarkup: getLanguageMenuMarkup('english')
       };
 
     case 'set_lang_both':
-      saveUser(chatId, { language: 'both' });
+      saveUser(chatId, { language: 'both', username, firstName });
       return {
         text: `✅ <b>Language Set / மொழி தேர்வு செய்யப்பட்டது!</b>\n\nFrom now on, I will display Kurals and details in <b>Both Tamil and English</b> 🌐`,
         replyMarkup: getLanguageMenuMarkup('both')
@@ -856,7 +929,7 @@ function sanitizeTelegramMarkup(markup: any, allowWebApp: boolean = true): any {
   return cloned;
 }
 
-async function sendTelegramMessage(token: string, chatId: number, response: BotResponse) {
+export async function sendTelegramMessage(token: string, chatId: number, response: BotResponse): Promise<{ ok: boolean; messageId?: number; error?: string }> {
   try {
     const url = `https://api.telegram.org/bot${token}/sendMessage`;
     const sanitizedMarkup = sanitizeTelegramMarkup(response.replyMarkup, true);
@@ -875,8 +948,9 @@ async function sendTelegramMessage(token: string, chatId: number, response: BotR
     });
     
     if (!res.ok) {
-      const errText = await res.text();
-      console.error(`Error sending Telegram message to chat ${chatId}:`, errText);
+      let errText = await res.text();
+      const classification = classifyTelegramError(null, res.status, errText);
+      console.error(`Error sending Telegram message to chat ${chatId} [${classification.category}]: ${classification.description}`);
       
       // If error is related to Web App URL or bad inline keyboard, retry with web_app stripped
       if (errText.includes('Web App') || errText.includes('Only HTTPS links are allowed') || errText.includes('BUTTON_URL_INVALID')) {
@@ -890,25 +964,44 @@ async function sendTelegramMessage(token: string, chatId: number, response: BotR
           signal: AbortSignal.timeout(15000)
         });
         if (!res.ok) {
-          const fallbackErr = await res.text();
-          console.error(`Retry without web_app also failed for chat ${chatId}:`, fallbackErr);
+          errText = await res.text();
+          const fallbackClass = classifyTelegramError(null, res.status, errText);
+          console.error(`Retry without web_app also failed for chat ${chatId} [${fallbackClass.category}]: ${fallbackClass.description}`);
+          return { ok: false, error: `${fallbackClass.category}: ${fallbackClass.description}` };
         }
       } else if (errText.includes("can't parse entities")) {
         // Fallback for HTML entity parsing issues
         delete payload.parse_mode;
-        await fetch(url, {
+        res = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(15000)
         });
+        if (!res.ok) {
+          errText = await res.text();
+          return { ok: false, error: errText };
+        }
+      } else {
+        return { ok: false, error: `${classification.category}: ${classification.description}` };
       }
     }
-  } catch (err) {
-    console.error(`Failed to send Telegram message to chat ${chatId}:`, err);
+
+    const data: any = await res.json().catch(() => null);
+    return { ok: true, messageId: data?.result?.message_id };
+  } catch (err: any) {
+    const classification = classifyTelegramError(err);
+    console.error(`Failed to send Telegram message to chat ${chatId} [${classification.category}]: ${classification.description}`);
+    return { ok: false, error: `${classification.category}: ${classification.description} (${err?.message || ''})` };
   }
 }
 
-// Helper to get time formatted in India Standard Time (IST)
+// Helper to get current date formatted in India Standard Time (IST) YYYY-MM-DD
+export function getISTDateString(date: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(date);
+}
+
+// Helper to get time formatted in India Standard Time (IST) "07:40 AM"
 export function getISTTimeString(date: Date = new Date()): string {
   try {
     const formatter = new Intl.DateTimeFormat('en-US', {
@@ -926,77 +1019,455 @@ export function getISTTimeString(date: Date = new Date()): string {
       if (part.type === 'minute') minute = part.value;
       if (part.type === 'dayPeriod') dayPeriod = part.value;
     }
-    // Pad to match DB expectation (e.g., "08:00:AM")
     hour = hour.padStart(2, '0');
     minute = minute.padStart(2, '0');
     const ampm = dayPeriod.toUpperCase();
-    return `${hour}:${minute}:${ampm}`;
+    return `${hour}:${minute} ${ampm}`;
   } catch (err) {
     console.error("Error formatting IST time:", err);
-    // Fallback to server local time if timeZone not supported
     let hours = date.getHours();
     const minutes = String(date.getMinutes()).padStart(2, '0');
     const ampm = hours >= 12 ? 'PM' : 'AM';
     hours = hours % 12;
-    hours = hours ? hours : 12; // '0' should be '12'
+    hours = hours ? hours : 12;
     const hoursStr = String(hours).padStart(2, '0');
-    return `${hoursStr}:${minutes}:${ampm}`;
+    return `${hoursStr}:${minutes} ${ampm}`;
   }
 }
 
-// Background scheduler for daily reminders (checks every minute)
-export function startReminderScheduler(token: string | undefined) {
-  const hasToken = token && token !== 'MY_TELEGRAM_BOT_TOKEN' && token.trim() !== '';
-  if (hasToken) {
-    console.log("⏰ Reminder Scheduler: Initialized for Real Telegram users (IST Timezone).");
-  } else {
-    console.log("⏰ Reminder Scheduler: Initialized for Simulated Companion users only (IST Timezone).");
+// Re-export parseTimeMinutes from db for backwards compatibility
+export { parseTimeMinutes };
+
+/**
+ * Determines whether a user's configured reminder is eligible for delivery during the current tick.
+ * Supports exact minute match (0-min lag) and a 1-to-2 minute bounded catch-up window (maxLag = 2).
+ * Handles minute rollover around midnight (00:00 vs 23:59).
+ */
+export function isReminderDueInWindow(
+  nowMinutes: number,
+  userMinutes: number,
+  maxLagMinutes: number = 2
+): { isDue: boolean; isCatchUp: boolean; lagMinutes: number } {
+  let diff = nowMinutes - userMinutes;
+  // Handle cross-midnight wrap (e.g. 00:01 AM tick for a 11:59 PM scheduled reminder)
+  if (diff < -720) {
+    diff += 1440;
+  } else if (diff > 720) {
+    diff -= 1440;
   }
-  
-  setInterval(async () => {
-    if (isBotServiceStopped) {
-      return; // Do nothing if bot service is stopped
-    }
-    try {
-      // Get current hour and minute in Asia/Kolkata (IST)
-      const timeString = getISTTimeString();
-      const users = getAllUsers();
-      let triggeredCount = 0;
+  // If tick arrived within [0 .. maxLagMinutes] after the trigger time
+  if (diff >= 0 && diff <= maxLagMinutes) {
+    return { isDue: true, isCatchUp: diff > 0, lagMinutes: diff };
+  }
+  return { isDue: false, isCatchUp: false, lagMinutes: diff };
+}
 
-      for (const user of users) {
-        if (user.triggerTime === timeString) {
-          const dailyKural = getDailyKural();
-          const response: BotResponse = {
-            text: `📅 <b>DAILY REMINDER / தினசரி நினைவூட்டல்</b>\n\n${formatKural(dailyKural, user.language || 'both')}`,
-            replyMarkup: getMainMenuMarkup()
-          };
+/**
+ * Validates external scheduler authentication against configured SCHEDULER_SECRET.
+ * Accepts header ('x-scheduler-secret' or 'authorization: Bearer <secret>'), query param ('?secret='),
+ * or JSON body ('{ secret: "..." }').
+ * If no secret is configured in environment, returns true (open by default).
+ */
+export function validateSchedulerAuth(
+  headers: Record<string, string | string[] | undefined> = {},
+  queryOrBodySecret?: string,
+  configuredSecret: string | undefined = process.env.SCHEDULER_SECRET
+): boolean {
+  if (!configuredSecret || configuredSecret.trim() === '') {
+    return true; // No secret configured; allow open requests
+  }
 
-          // Check if it's a simulated companion user
-          if (user.chatId < 10000000) {
-            console.log(`⏰ Reminder [SIMULATED]: Sending daily couplet to companion user ${user.chatId} at ${timeString} IST`);
-            addActivityLog(user.chatId, user.username || user.firstName || `User ${user.chatId}`, 'outgoing', `📅 DAILY REMINDER: ${dailyKural.english}`);
-            triggeredCount++;
-          } else if (hasToken) {
-            console.log(`⏰ Reminder [REAL]: Sending daily couplet to real Telegram user ${user.chatId} at ${timeString} IST`);
-            await sendTelegramMessage(token!, user.chatId, response);
-            addActivityLog(user.chatId, user.username || user.firstName || `User ${user.chatId}`, 'outgoing', `📅 DAILY REMINDER (Sent via Telegram)`);
-            triggeredCount++;
-          } else {
-            console.log(`⏰ Reminder [SKIPPED]: Real user ${user.chatId} trigger matched ${timeString} IST but TELEGRAM_BOT_TOKEN is not configured.`);
-          }
+  const rawHeaderSecret = headers['x-scheduler-secret'];
+  const headerSecret = typeof rawHeaderSecret === 'string'
+    ? rawHeaderSecret.trim()
+    : Array.isArray(rawHeaderSecret)
+      ? rawHeaderSecret[0]?.trim()
+      : undefined;
+
+  const rawAuthHeader = headers['authorization'];
+  const authHeader = typeof rawAuthHeader === 'string' ? rawAuthHeader.trim() : undefined;
+  const bearerSecret = authHeader && authHeader.startsWith('Bearer ')
+    ? authHeader.slice(7).trim()
+    : undefined;
+
+  const candidate = headerSecret || (queryOrBodySecret ? String(queryOrBodySecret).trim() : undefined) || bearerSecret;
+  return candidate === configuredSecret.trim();
+}
+
+export interface ScheduledTickResult {
+  timeString: string;
+  dateString: string;
+  source: string;
+  evaluatedCount: number;
+  dueCount: number;
+  normalMatchesCount: number;
+  catchUpMatchesCount: number;
+  claimedCount: number;
+  deliveredCount: number;
+  failedCount: number;
+  skippedCount: number;
+  details: Array<{
+    chatId: number;
+    username?: string;
+    status: 'DELIVERED' | 'FAILED' | 'SKIPPED';
+    reason?: string;
+    kuralNumber?: number;
+    isCatchUp?: boolean;
+    lagMinutes?: number;
+  }>;
+}
+
+export async function processScheduledRemindersTick(
+  token: string | undefined,
+  customTimeString?: string,
+  source: 'cloud_scheduler' | 'local_interval' | 'manual_test' | string = 'cloud_scheduler',
+  customDateString?: string
+): Promise<ScheduledTickResult> {
+  const hasToken = token && token !== 'MY_TELEGRAM_BOT_TOKEN' && token.trim() !== '';
+  const timeString = customTimeString || getISTTimeString();
+  const dateString = customDateString || getISTDateString();
+
+  const currentMinutes = parseTimeMinutes(timeString);
+  const users = getAllUsers();
+
+  interface CandidateUser {
+    user: BotUser;
+    isCatchUp: boolean;
+    lagMinutes: number;
+  }
+
+  const dueCandidates: CandidateUser[] = [];
+  let normalMatches = 0;
+  let catchUpMatches = 0;
+
+  for (const user of users) {
+    if (!user.triggerTime || user.triggerTime === 'none') continue;
+
+    if (currentMinutes !== null) {
+      const userMinutes = parseTimeMinutes(user.triggerTime);
+      if (userMinutes !== null) {
+        const { isDue, isCatchUp, lagMinutes } = isReminderDueInWindow(currentMinutes, userMinutes, 2);
+        if (isDue) {
+          dueCandidates.push({ user, isCatchUp, lagMinutes });
+          if (isCatchUp) catchUpMatches++;
+          else normalMatches++;
         }
       }
-
-      if (triggeredCount > 0) {
-        addActivityLog(0, 'system', 'system', `Scheduler processed daily reminders for ${triggeredCount} subscribers`, 'info');
-      }
-    } catch (err) {
-      console.error("Error in reminder scheduler interval:", err);
     }
-  }, 60000); // check every minute
+  }
+
+  const result: ScheduledTickResult = {
+    timeString,
+    dateString,
+    source,
+    evaluatedCount: users.length,
+    dueCount: dueCandidates.length,
+    normalMatchesCount: normalMatches,
+    catchUpMatchesCount: catchUpMatches,
+    claimedCount: 0,
+    deliveredCount: 0,
+    failedCount: 0,
+    skippedCount: 0,
+    details: []
+  };
+
+  if (dueCandidates.length === 0) {
+    recordSchedulerTick(timeString, null, {
+      evaluatedCount: users.length,
+      normalMatchesCount: 0,
+      catchUpMatchesCount: 0,
+      claimedCount: 0,
+      skippedCount: 0,
+      source
+    });
+    return result;
+  }
+
+  // If bot service has been paused/stopped by admin, skip all deliveries safely
+  if (isBotServiceStopped) {
+    const stoppedResult: ScheduledTickResult = {
+      timeString,
+      dateString,
+      source,
+      evaluatedCount: users.length,
+      dueCount: dueCandidates.length,
+      normalMatchesCount: normalMatches,
+      catchUpMatchesCount: catchUpMatches,
+      claimedCount: 0,
+      deliveredCount: 0,
+      failedCount: 0,
+      skippedCount: dueCandidates.length,
+      details: dueCandidates.map(c => ({
+        chatId: c.user.chatId,
+        username: c.user.username,
+        status: 'SKIPPED',
+        reason: 'Bot service is stopped',
+        isCatchUp: c.isCatchUp,
+        lagMinutes: c.lagMinutes
+      }))
+    };
+    recordSchedulerTick(timeString, null, {
+      evaluatedCount: users.length,
+      normalMatchesCount: normalMatches,
+      catchUpMatchesCount: catchUpMatches,
+      claimedCount: 0,
+      skippedCount: dueCandidates.length,
+      source
+    });
+    return stoppedResult;
+  }
+
+  const dailyKural = getDailyKural();
+
+  for (const candidate of dueCandidates) {
+    const user = candidate.user;
+    // 1. Atomic date-specific claim check in Firestore (YYYY-MM-DD + chatId + triggerTime)
+    const claim = await claimReminderDeliveryAtomic(user.chatId, dateString, user.triggerTime);
+    if (!claim.claimed) {
+      result.skippedCount++;
+      result.details.push({
+        chatId: user.chatId,
+        username: user.username,
+        status: 'SKIPPED',
+        reason: claim.reason || 'Already processed or in-flight',
+        isCatchUp: candidate.isCatchUp,
+        lagMinutes: candidate.lagMinutes
+      });
+      continue;
+    }
+
+    result.claimedCount++;
+
+    const catchUpNotice = candidate.isCatchUp ? ` (tolerance window: +${candidate.lagMinutes}m)` : '';
+    const response: BotResponse = {
+      text: `📅 <b>DAILY REMINDER / தினசரி நினைவூட்டல்</b>\n\n${formatKural(dailyKural, user.language || 'both')}`,
+      replyMarkup: getMainMenuMarkup()
+    };
+
+    // 2. Simulated companion users
+    if (user.chatId < 10000000) {
+      console.log(`⏰ Reminder [SIMULATED]: Daily couplet to companion user ${user.chatId} at ${timeString} IST${catchUpNotice}`);
+      await markReminderDelivered(user.chatId, dateString, user.triggerTime, dailyKural.id);
+      addActivityLog(user.chatId, user.username || user.firstName || `User ${user.chatId}`, 'outgoing', `📅 DAILY REMINDER: ${dailyKural.english}`, 'info');
+      result.deliveredCount++;
+      result.details.push({
+        chatId: user.chatId,
+        username: user.username,
+        status: 'DELIVERED',
+        kuralNumber: dailyKural.id,
+        isCatchUp: candidate.isCatchUp,
+        lagMinutes: candidate.lagMinutes
+      });
+    } else if (hasToken) {
+      // 3. Real Telegram user delivery
+      console.log(`⏰ Reminder [REAL]: Sending daily couplet to Telegram user ${user.chatId} at ${timeString} IST${catchUpNotice}`);
+      const sendResult = await sendTelegramMessage(token!, user.chatId, response);
+      if (sendResult.ok) {
+        await markReminderDelivered(user.chatId, dateString, user.triggerTime, dailyKural.id, sendResult.messageId);
+        addActivityLog(user.chatId, user.username || user.firstName || `User ${user.chatId}`, 'outgoing', `📅 DAILY REMINDER (Delivered via Telegram #${sendResult.messageId || ''})`, 'info');
+        result.deliveredCount++;
+        result.details.push({
+          chatId: user.chatId,
+          username: user.username,
+          status: 'DELIVERED',
+          kuralNumber: dailyKural.id,
+          isCatchUp: candidate.isCatchUp,
+          lagMinutes: candidate.lagMinutes
+        });
+      } else {
+        await markReminderFailed(user.chatId, dateString, user.triggerTime, sendResult.error || 'Telegram send failure');
+        addActivityLog(user.chatId, user.username || user.firstName || `User ${user.chatId}`, 'system', `Failed sending reminder: ${sendResult.error}`, 'error');
+        result.failedCount++;
+        result.details.push({
+          chatId: user.chatId,
+          username: user.username,
+          status: 'FAILED',
+          reason: sendResult.error,
+          isCatchUp: candidate.isCatchUp,
+          lagMinutes: candidate.lagMinutes
+        });
+      }
+    } else {
+      await markReminderFailed(user.chatId, dateString, user.triggerTime, 'TELEGRAM_BOT_TOKEN not configured on server');
+      result.failedCount++;
+      result.details.push({
+        chatId: user.chatId,
+        username: user.username,
+        status: 'FAILED',
+        reason: 'TELEGRAM_BOT_TOKEN not configured',
+        isCatchUp: candidate.isCatchUp,
+        lagMinutes: candidate.lagMinutes
+      });
+    }
+  }
+
+  recordSchedulerTick(timeString, null, {
+    evaluatedCount: users.length,
+    normalMatchesCount: normalMatches,
+    catchUpMatchesCount: catchUpMatches,
+    claimedCount: result.claimedCount,
+    skippedCount: result.skippedCount
+  });
+
+  if (result.deliveredCount > 0) {
+    addActivityLog(0, 'system', 'system', `Scheduler processed daily reminders: ${result.deliveredCount} delivered, ${result.failedCount} failed (${source})`, 'info');
+  }
+
+  return result;
+}
+
+let activeSchedulerTimer: NodeJS.Timeout | null = null;
+let lastOpportunisticTickTimestamp = 0;
+
+// Cleanly stop the background reminder scheduler timer
+export function stopReminderScheduler(): void {
+  if (activeSchedulerTimer) {
+    clearInterval(activeSchedulerTimer);
+    activeSchedulerTimer = null;
+  }
+  setSchedulerLifecycleState(Date.now(), false);
+  console.log("⏰ In-Process Reminder Scheduler: Stopped.");
+}
+
+// Background scheduler for daily reminders with singleton protection and lifecycle tracking
+export function startReminderScheduler(token: string | undefined): void {
+  // If an existing timer was already running, clear it to avoid duplicate timers
+  if (activeSchedulerTimer) {
+    clearInterval(activeSchedulerTimer);
+    activeSchedulerTimer = null;
+  }
+
+  const now = Date.now();
+  setSchedulerLifecycleState(now, true, now);
+
+  const hasToken = token && token !== 'MY_TELEGRAM_BOT_TOKEN' && token.trim() !== '';
+  if (hasToken) {
+    console.log("⏰ In-Process Reminder Scheduler: Initialized (IST Timezone, 60s interval).");
+  } else {
+    console.log("⏰ In-Process Reminder Scheduler: Initialized for Simulated Companion users (IST Timezone).");
+  }
+
+  // 1. Immediately evaluate any reminder currently due on startup / restart (catch-up window: +0m, +1m, +2m)
+  processScheduledRemindersTick(token, undefined, 'startup_init').catch(err => {
+    console.warn("Startup reminder evaluation notice:", err?.message || err);
+  });
+  
+  // 2. Schedule recurring 60-second in-process heartbeat interval
+  activeSchedulerTimer = setInterval(async () => {
+    if (isBotServiceStopped) {
+      return;
+    }
+    try {
+      recordSchedulerHeartbeat('local_interval');
+      await processScheduledRemindersTick(token, undefined, 'local_interval');
+    } catch (err: any) {
+      console.error("Error in fallback reminder scheduler interval:", err?.message || err);
+    }
+  }, 60000);
+}
+
+/**
+ * Opportunistically checks for due reminders when HTTP traffic (webhook/ping/page load) arrives.
+ * Throttled to execute at most once every 30 seconds to prevent unnecessary database load.
+ */
+export async function opportunisticReminderCheck(token?: string): Promise<void> {
+  const now = Date.now();
+  if (isBotServiceStopped) return;
+  if (now - lastOpportunisticTickTimestamp < 30000) {
+    return; // Throttled
+  }
+  lastOpportunisticTickTimestamp = now;
+  recordSchedulerHeartbeat('opportunistic_traffic');
+  try {
+    await processScheduledRemindersTick(token, undefined, 'opportunistic_traffic');
+  } catch (err: any) {
+    console.warn("Opportunistic reminder check notice:", err?.message || err);
+  }
 }
 
 // Simple polling bot loop for production/deployment
+// Bot runtime telemetry & connection state
+export interface TelegramBotState {
+  isConnected: boolean;
+  botInfo: { id: number; username: string; firstName: string } | null;
+  mode: 'polling' | 'webhook' | 'stopped' | 'uninitialized';
+  lastPollTimestamp: number;
+  lastSuccessfulUpdateId: number;
+  consecutiveErrors: number;
+  lastErrorMessage: string | null;
+  initAttempts: number;
+}
+
+let botState: TelegramBotState = {
+  isConnected: false,
+  botInfo: null,
+  mode: 'uninitialized',
+  lastPollTimestamp: 0,
+  lastSuccessfulUpdateId: 0,
+  consecutiveErrors: 0,
+  lastErrorMessage: null,
+  initAttempts: 0
+};
+
+let activePollerAbortController: AbortController | null = null;
+
+export function getTelegramBotState(): TelegramBotState {
+  return { ...botState };
+}
+
+// Token-safe logger that replaces bot token strings with [REDACTED]
+export function maskToken(str: string): string {
+  if (!str) return '';
+  return str.replace(/\/bot[0-9]+:[a-zA-Z0-9_-]+/g, '/bot[REDACTED]');
+}
+
+export type TelegramErrorCategory = 
+  | 'INVALID_TOKEN' 
+  | 'WEBHOOK_CONFLICT' 
+  | 'BLOCKED_BY_USER' 
+  | 'TIMEOUT' 
+  | 'DNS_NETWORK_FAILURE' 
+  | 'CONNECTION_RESET' 
+  | 'TELEGRAM_API_ERROR' 
+  | 'HTTP_ERROR';
+
+export interface TelegramErrorClassification {
+  category: TelegramErrorCategory;
+  description: string;
+  statusCode?: number;
+}
+
+export function classifyTelegramError(err: any, status?: number, body?: string): TelegramErrorClassification {
+  if (status === 401 || (body && body.includes('Unauthorized'))) {
+    return { category: 'INVALID_TOKEN', description: 'Invalid Telegram Bot Token (401 Unauthorized)', statusCode: 401 };
+  }
+  if (status === 409 || (body && (body.includes('Conflict') || body.includes("can't use getUpdates")))) {
+    return { category: 'WEBHOOK_CONFLICT', description: 'Webhook conflict: webhook is active while polling (409 Conflict)', statusCode: 409 };
+  }
+  if (status === 403 || (body && (body.includes('bot was blocked') || body.includes('user is deactivated') || body.includes('chat not found')))) {
+    return { category: 'BLOCKED_BY_USER', description: 'Bot was blocked by user or chat is not accessible (403 Forbidden)', statusCode: 403 };
+  }
+
+  const errCode = err?.cause?.code || err?.code || '';
+  const errMsg = String(err?.message || err || '');
+
+  if (err?.name === 'TimeoutError' || err?.name === 'AbortError' || errCode === 'ETIMEDOUT' || errCode === 'UND_ERR_CONNECT_TIMEOUT' || errMsg.toLowerCase().includes('timeout')) {
+    return { category: 'TIMEOUT', description: `Request timed out (${errCode || 'Timeout'})` };
+  }
+  if (errCode === 'ENOTFOUND' || errCode === 'EAI_AGAIN' || errCode === 'UND_ERR_RESOLVE_HOST') {
+    return { category: 'DNS_NETWORK_FAILURE', description: `DNS resolution failure (${errCode})` };
+  }
+  if (errCode === 'ECONNRESET' || errCode === 'ECONNREFUSED') {
+    return { category: 'CONNECTION_RESET', description: `TCP connection reset or refused (${errCode})` };
+  }
+  if (status && status >= 400) {
+    const cleanBody = body ? maskToken(body).substring(0, 150) : '';
+    return { category: status >= 500 ? 'HTTP_ERROR' : 'TELEGRAM_API_ERROR', description: `HTTP ${status}: ${cleanBody || 'API response error'}`, statusCode: status };
+  }
+
+  return { category: 'DNS_NETWORK_FAILURE', description: maskToken(errMsg) || 'Network fetch failure' };
+}
+
 // Unified Telegram update processor for both Poller and Webhook
 export async function handleTelegramUpdate(token: string, update: any): Promise<void> {
   if (isBotServiceStopped) {
@@ -1008,11 +1479,33 @@ export async function handleTelegramUpdate(token: string, update: any): Promise<
     if (update.message) {
       const msg = update.message;
       const chatId = msg.chat.id;
-      const text = msg.text || '';
       const username = msg.from?.username;
       const firstName = msg.from?.first_name;
 
-      console.log(`💬 [Telegram Bot] Message received from ${chatId} (${username}): "${text}"`);
+      // Handle Telegram WebApp Data (e.g. from Visual Time Picker)
+      if (msg.web_app_data && msg.web_app_data.data) {
+        const rawWebAppData = msg.web_app_data.data.trim();
+        console.log(`📱 [Telegram Bot] WebApp Data received from ${chatId} (${username || firstName || 'User'}): "${rawWebAppData}"`);
+        addActivityLog(chatId, username || firstName || `User ${chatId}`, 'incoming', `WebApp Time Picker: ${rawWebAppData}`);
+
+        const parsedTime = parseCustomTimeString(rawWebAppData);
+        if (parsedTime) {
+          saveUser(chatId, { triggerTime: parsedTime, username, firstName });
+          const response: BotResponse = {
+            text: parsedTime === 'none'
+              ? `✅ <b>Reminders turned OFF / நினைவூட்டல் நிறுத்தப்பட்டது!</b>\n\nAutomatic daily reminders are now disabled. You can still fetch couplets manually with /daily or /random.`
+              : `✅ <b>Custom Reminder Set / நினைவூட்டல் குறிக்கப்பட்டது!</b>\n\nI will send you a daily couplet every day at your exact customized time:\n⏰ <b>${formatTimeDisplay(parsedTime)} (IST)</b>\n\n<i>You can re-adjust anytime using /time or the menu!</i>`,
+            replyMarkup: getCustomReminderMenuMarkup(parsedTime, parsedTime, chatId)
+          };
+          await sendTelegramMessage(token, chatId, response);
+          addActivityLog(chatId, username || firstName || `User ${chatId}`, 'outgoing', response.text);
+          return;
+        }
+      }
+
+      const text = msg.text || '';
+
+      console.log(`💬 [Telegram Bot] Message received from ${chatId} (${username || firstName || 'User'}): "${text}"`);
       addActivityLog(chatId, username || firstName || `User ${chatId}`, 'incoming', text);
 
       const response = await handleBotMessage(chatId, text, username, firstName);
@@ -1022,7 +1515,7 @@ export async function handleTelegramUpdate(token: string, update: any): Promise<
     } 
     else if (update.callback_query) {
       const cb = update.callback_query;
-      const chatId = cb.message.chat.id;
+      const chatId = cb.message?.chat?.id || cb.from?.id;
       const cbData = cb.data || '';
       const queryId = cb.id;
       const username = cb.from?.username;
@@ -1031,7 +1524,7 @@ export async function handleTelegramUpdate(token: string, update: any): Promise<
       console.log(`🔘 [Telegram Bot] Callback received from ${chatId}: "${cbData}"`);
       addActivityLog(chatId, username || firstName || `User ${chatId}`, 'incoming', `Pressed button: ${cbData}`);
 
-      const response = await handleBotCallback(chatId, cbData);
+      const response = await handleBotCallback(chatId, cbData, username, firstName);
       await sendTelegramMessage(token, chatId, response);
 
       addActivityLog(chatId, username || firstName || `User ${chatId}`, 'outgoing', response.text);
@@ -1040,7 +1533,8 @@ export async function handleTelegramUpdate(token: string, update: any): Promise<
         await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ callback_query_id: queryId })
+          body: JSON.stringify({ callback_query_id: queryId }),
+          signal: AbortSignal.timeout(10000)
         });
       } catch (e) {
         console.error("Failed to answer callback query:", e);
@@ -1052,103 +1546,235 @@ export async function handleTelegramUpdate(token: string, update: any): Promise<
   }
 }
 
-export function startRealTelegramBot(token: string) {
-  let offset = 0;
-  console.log("🤖 Telegram Bot: Initializing real bot controller...");
+export async function reconnectTelegramBot(token: string): Promise<{ success: boolean; message: string; botInfo?: any }> {
+  console.log("🔄 Telegram Bot: Manual reconnection initiated...");
+  if (activePollerAbortController) {
+    activePollerAbortController.abort();
+    activePollerAbortController = null;
+  }
+  return startRealTelegramBot(token);
+}
 
-  // Query webhook info to ensure we don't have stale/external webhooks stealing updates
-  fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`)
-    .then(r => r.json())
-    .then(async (webhookData: any) => {
-      const activeUrl = webhookData.ok && webhookData.result && webhookData.result.url;
-      const currentApp = getAppUrl();
-      const expectedWebhookUrl = currentApp ? `${currentApp}/api/telegram-webhook` : '';
+export async function startRealTelegramBot(rawToken: string): Promise<{ success: boolean; message: string; botInfo?: any }> {
+  const token = rawToken.trim();
+  if (!token || token === 'MY_TELEGRAM_BOT_TOKEN') {
+    botState.mode = 'uninitialized';
+    botState.isConnected = false;
+    return { success: false, message: 'TELEGRAM_BOT_TOKEN is missing or placeholder.' };
+  }
 
-      // If there is any webhook active that does not match this server's current endpoint,
-      // delete it immediately so updates are fetched by our live long-polling loop!
-      if (activeUrl && activeUrl !== expectedWebhookUrl) {
-        console.log(`🧹 Detected external/stale webhook: ${activeUrl}. Deleting to enable live polling...`);
-        try {
-          await fetch(`https://api.telegram.org/bot${token}/deleteWebhook?drop_pending_updates=false`);
-          addActivityLog(0, 'system', 'system', `Deleted stale webhook (${activeUrl}) to switch to active Poller`, 'info');
-        } catch (e) {
-          console.error("Failed to delete stale webhook:", e);
-        }
-      } else if (activeUrl && activeUrl === expectedWebhookUrl) {
-        console.log(`🌐 Telegram Bot: Active webhook matches current App URL: ${activeUrl}. Waiting for webhook deliveries.`);
-        addActivityLog(0, 'system', 'system', `Bot initialized in Webhook mode (${activeUrl})`, 'info');
-        return;
+  // Cancel any existing running poller loop
+  if (activePollerAbortController) {
+    activePollerAbortController.abort();
+    activePollerAbortController = null;
+  }
+
+  botState.initAttempts++;
+  console.log(`🤖 Telegram Bot: Initializing controller (Attempt #${botState.initAttempts})...`);
+
+  // Step 1: Verify token and test Telegram API connectivity with retry backoff
+  let botIdentity: { id: number; username: string; firstName: string } | null = null;
+  const maxRetries = 4;
+  const backoffDelays = [1500, 3000, 5000, 8000];
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const getMeRes = await fetch(`https://api.telegram.org/bot${token}/getMe`, {
+        signal: AbortSignal.timeout(10000)
+      });
+
+      if (getMeRes.status === 401) {
+        const desc = "Telegram API rejected token: 401 Unauthorized. Please verify TELEGRAM_BOT_TOKEN.";
+        console.error(`❌ ${desc}`);
+        botState.isConnected = false;
+        botState.lastErrorMessage = desc;
+        addActivityLog(0, 'system', 'system', desc, 'error');
+        return { success: false, message: desc };
       }
 
-      console.log("🔌 Telegram Bot Poller: Initializing live long-polling mode...");
-      addActivityLog(0, 'system', 'system', `Bot initialized in live Long-Polling mode.`, 'info');
+      if (getMeRes.ok) {
+        const getMeData: any = await getMeRes.json();
+        if (getMeData.ok && getMeData.result) {
+          botIdentity = {
+            id: getMeData.result.id,
+            username: getMeData.result.username || '',
+            firstName: getMeData.result.first_name || 'Bot'
+          };
+          botState.botInfo = botIdentity;
+          botState.isConnected = true;
+          botState.lastErrorMessage = null;
+          botState.consecutiveErrors = 0;
+          console.log(`✅ Telegram Bot authenticated successfully: @${botIdentity.username} (ID: ${botIdentity.id})`);
+          break;
+        }
+      }
+    } catch (err: any) {
+      const classification = classifyTelegramError(err);
+      console.warn(`⏳ Telegram Bot connection attempt ${attempt + 1}/${maxRetries + 1} failed [${classification.category}]: ${classification.description}`);
+      if (attempt < maxRetries) {
+        await new Promise(r => setTimeout(r, backoffDelays[attempt]));
+      } else {
+        const failureReason = `Failed to connect to Telegram API after ${maxRetries + 1} attempts [${classification.category}]: ${classification.description}`;
+        console.error(`❌ ${failureReason}`);
+        botState.isConnected = false;
+        botState.lastErrorMessage = failureReason;
+        addActivityLog(0, 'system', 'system', failureReason, 'error');
+        return { success: false, message: failureReason };
+      }
+    }
+  }
 
-      // Make sure webhook is clean
+  if (!botIdentity) {
+    return { success: false, message: 'Could not verify Telegram Bot credentials.' };
+  }
+
+  // Step 2: Check webhook configuration
+  try {
+    const webhookRes = await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`, {
+      signal: AbortSignal.timeout(10000)
+    });
+    const webhookData: any = await webhookRes.json();
+    const activeUrl = webhookData.ok && webhookData.result && webhookData.result.url ? webhookData.result.url : '';
+
+    // If ANY webhook is active on Telegram, maintain Webhook mode and NEVER delete it
+    if (activeUrl && activeUrl.trim() !== '') {
+      console.log(`🌐 Telegram Bot: Active production webhook verified on Telegram (${activeUrl}). Maintaining Webhook mode.`);
+      botState.mode = 'webhook';
+      botState.isConnected = true;
+      botState.lastErrorMessage = null;
+      botState.consecutiveErrors = 0;
+      addActivityLog(0, 'system', 'system', `Bot online in Webhook mode (@${botIdentity.username}) at ${activeUrl}`, 'info');
+      return { success: true, message: `Bot active in Webhook mode (@${botIdentity.username})`, botInfo: botIdentity };
+    }
+
+    // Check if a production webhook URL is configured in environment or Firestore
+    const gatewayConfig = await getSystemGatewayConfig();
+    const configuredBaseUrl = process.env.TELEGRAM_WEBHOOK_URL || process.env.PUBLIC_APP_URL || gatewayConfig.webhookUrl;
+
+    if (configuredBaseUrl && configuredBaseUrl.trim() !== '') {
+      const webhookEndpoint = configuredBaseUrl.endsWith('/api/telegram-webhook')
+        ? configuredBaseUrl.trim()
+        : `${configuredBaseUrl.replace(/\/$/, '')}/api/telegram-webhook`;
+      const secretToken = process.env.TELEGRAM_WEBHOOK_SECRET || gatewayConfig.secretToken;
+
+      console.log(`📡 Registering configured production webhook with Telegram: ${webhookEndpoint}`);
+      const setBody: any = {
+        url: webhookEndpoint,
+        drop_pending_updates: false
+      };
+      if (secretToken) {
+        setBody.secret_token = secretToken;
+      }
+
+      const setRes = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(setBody),
+        signal: AbortSignal.timeout(15000)
+      });
+      const setData: any = await setRes.json().catch(() => ({}));
+
+      if (setData.ok) {
+        botState.mode = 'webhook';
+        botState.isConnected = true;
+        botState.lastErrorMessage = null;
+        botState.consecutiveErrors = 0;
+        addActivityLog(0, 'system', 'system', `Registered production webhook (@${botIdentity.username}) at ${webhookEndpoint}`, 'info');
+        return { success: true, message: `Bot registered and active in Webhook mode (@${botIdentity.username})`, botInfo: botIdentity };
+      } else {
+        console.warn(`Could not auto-register webhook: ${setData.description || 'Unknown error'}`);
+      }
+    }
+  } catch (webhookErr) {
+    console.warn("Could not query webhook info, proceeding with polling setup:", webhookErr);
+  }
+
+  // Step 3: Launch Local Fallback Polling Loop (Only if NO webhook is registered)
+  console.log(`🔌 Telegram Bot: Initializing fallback Long-Polling engine for @${botIdentity.username}...`);
+  botState.mode = 'polling';
+  addActivityLog(0, 'system', 'system', `Bot online in Fallback Polling mode (@${botIdentity.username})`, 'info');
+
+  const abortController = new AbortController();
+  activePollerAbortController = abortController;
+
+  const poll = async () => {
+    let offset = 0;
+
+    while (!abortController.signal.aborted) {
+      if (isBotServiceStopped) {
+        botState.mode = 'stopped';
+        await new Promise(r => setTimeout(r, 2000));
+        continue;
+      }
+
       try {
-        await fetch(`https://api.telegram.org/bot${token}/deleteWebhook?drop_pending_updates=false`);
-      } catch (e) {}
+        const url = `https://api.telegram.org/bot${token}/getUpdates?offset=${offset}&timeout=15`;
+        const res = await fetch(url, {
+          signal: AbortSignal.timeout(25000),
+          headers: { 'Connection': 'keep-alive' }
+        });
 
-      const poll = async () => {
-        while (true) {
-          if (isBotServiceStopped) {
-            await new Promise(r => setTimeout(r, 2000));
-            continue;
+        if (abortController.signal.aborted) break;
+
+        if (!res.ok) {
+          const errText = await res.text();
+          const classification = classifyTelegramError(null, res.status, errText);
+          botState.lastErrorMessage = classification.description;
+
+          if (classification.category === 'WEBHOOK_CONFLICT') {
+            console.log("ℹ️ Webhook is active on Telegram (HTTP 409). Pausing poller and switching to Webhook mode.");
+            botState.mode = 'webhook';
+            botState.isConnected = true;
+            botState.lastErrorMessage = null;
+            break; // Stop poller cleanly, preserve webhook
           }
-          try {
-            // Use 15s server timeout and 20s abort timeout to prevent proxy idle socket drops
-            const url = `https://api.telegram.org/bot${token}/getUpdates?offset=${offset}&timeout=15`;
-            const res = await fetch(url, {
-              signal: AbortSignal.timeout(20000),
-              headers: { 'Connection': 'keep-alive' }
-            });
 
-            if (!res.ok) {
-              if (res.status === 409) {
-                console.log("ℹ️ Telegram Bot Poller: Webhook conflict detected (Status 409). Suspending poller.");
-                addActivityLog(0, 'system', 'system', `Polling loop suspended: Webhook conflict detected (409).`, 'info');
-                break;
-              }
-              console.warn(`Telegram API getUpdates returned status: ${res.status}`);
-              await new Promise(r => setTimeout(r, 5000));
-              continue;
-            }
+          if (classification.category === 'INVALID_TOKEN') {
+            console.error("❌ Telegram Token rejected (401 Unauthorized). Stopping polling loop.");
+            botState.isConnected = false;
+            break;
+          }
 
-            const data: any = await res.json();
-            if (data.ok && Array.isArray(data.result)) {
-              for (const update of data.result) {
-                offset = update.update_id + 1;
-                await handleTelegramUpdate(token, update);
-              }
-            }
-          } catch (err: any) {
-            // In long-polling, socket read timeouts or idle resets are normal cycle events
-            const errCode = err?.cause?.code || err?.code || '';
-            const errMsg = String(err?.message || err || '');
-            const isSocketTimeout =
-              err?.name === 'TimeoutError' ||
-              err?.name === 'AbortError' ||
-              errCode === 'ETIMEDOUT' ||
-              errCode === 'ECONNRESET' ||
-              errCode === 'UND_ERR_CONNECT_TIMEOUT' ||
-              errMsg.includes('ETIMEDOUT') ||
-              errMsg.includes('timeout') ||
-              (errMsg.includes('fetch failed') && (errCode === 'ETIMEDOUT' || String(err?.cause).includes('ETIMEDOUT')));
+          console.warn(`Telegram API getUpdates error [${classification.category}]: ${classification.description}`);
+          botState.consecutiveErrors++;
+          await new Promise(r => setTimeout(r, 5000));
+          continue;
+        }
 
-            if (isSocketTimeout) {
-              // Benign idle socket renewal, seamlessly continue next poll cycle
-              await new Promise(r => setTimeout(r, 1000));
-            } else {
-              console.error("Non-timeout error in Telegram Polling loop:", err);
-              await new Promise(r => setTimeout(r, 4000));
-            }
+        const data: any = await res.json();
+        botState.lastPollTimestamp = Date.now();
+        botState.consecutiveErrors = 0;
+        botState.lastErrorMessage = null;
+
+        if (data.ok && Array.isArray(data.result)) {
+          for (const update of data.result) {
+            if (abortController.signal.aborted) break;
+            offset = update.update_id + 1;
+            botState.lastSuccessfulUpdateId = update.update_id;
+            await handleTelegramUpdate(token, update);
           }
         }
-      };
+      } catch (err: any) {
+        if (abortController.signal.aborted) break;
 
-      poll();
-    })
-    .catch(err => {
-      console.error("❌ Failed to query Telegram Webhook Info during initialization:", err);
-      addActivityLog(0, 'system', 'system', `Failed to initialize Telegram Bot: ${err instanceof Error ? err.message : err}`, 'error');
-    });
+        const classification = classifyTelegramError(err);
+        
+        if (classification.category === 'TIMEOUT') {
+          // Benign idle long-polling socket renewal, continue smoothly
+          await new Promise(r => setTimeout(r, 1000));
+        } else {
+          botState.consecutiveErrors++;
+          botState.lastErrorMessage = classification.description;
+          console.error(`Telegram Polling [${classification.category}]: ${classification.description}`);
+          await new Promise(r => setTimeout(r, 4000));
+        }
+      }
+    }
+  };
+
+  poll().catch(err => {
+    console.error("Fatal exception in poller loop:", err);
+  });
+
+  return { success: true, message: `Bot active in Long-Polling mode (@${botIdentity.username})`, botInfo: botIdentity };
 }

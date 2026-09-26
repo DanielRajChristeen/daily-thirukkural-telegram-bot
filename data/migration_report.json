@@ -1,0 +1,24 @@
+{
+  "timestamp": "2026-09-15T07:12:57.576Z",
+  "usersMigrated": 2,
+  "usersSkipped": 0,
+  "logsMigrated": 63,
+  "logsSkipped": 0,
+  "errors": [],
+  "verifiedUsersInFirestore": 2,
+  "verifiedLogsInFirestore": 63,
+  "sampleUsers": [
+    {
+      "chatId": 1315154025,
+      "username": "Santhosh",
+      "language": "both",
+      "triggerTime": "06:00:AM"
+    },
+    {
+      "chatId": 5164666817,
+      "username": "Daniel_Raj_7",
+      "language": "english",
+      "triggerTime": "08:45:AM"
+    }
+  ]
+}

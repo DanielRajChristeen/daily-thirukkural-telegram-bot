@@ -78,11 +78,11 @@ export default function App() {
 
   // --- BOT SIMULATOR STATE ---
   const [simUser, setSimUser] = useState<BotUser>({
-    chatId: 5164666817,
-    username: 'Daniel_Raj_7',
-    firstName: 'Daniel',
+    chatId: 100001,
+    username: 'Simulator_Persona',
+    firstName: 'Simulated User',
     language: 'both',
-    triggerTime: '11:00:PM',
+    triggerTime: '07:00:AM',
     lastActive: Date.now()
   });
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -95,39 +95,56 @@ export default function App() {
   };
 
   // --- DATA ACQUISITION & SYNCHRONIZATION ---
-  const fetchBotServiceStatus = async () => {
-    try {
-      const res = await fetch('/api/bot-status');
-      if (res.ok) {
-        const data = await res.json();
-        setIsBotStopped(data.stopped);
+  // Resilient fetch helper with timeout and automatic retry for iframe/cold-start stability
+  const safeFetchJson = async <T,>(url: string, retries: number = 2, delayMs: number = 600): Promise<T | null> => {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        const res = await fetch(url, { 
+          signal: controller.signal,
+          headers: { 'Accept': 'application/json' }
+        });
+        clearTimeout(timeoutId);
+        if (res.ok) {
+          return await res.json() as T;
+        }
+      } catch (err) {
+        if (attempt < retries) {
+          await new Promise(r => setTimeout(r, delayMs));
+          continue;
+        }
+        // Gracefully handle final failure without throwing uncaught console errors
+        console.warn(`Connection retry exhausted for ${url}:`, err instanceof Error ? err.message : err);
       }
-    } catch (err) {
-      console.error('Failed to query bot status:', err);
+    }
+    return null;
+  };
+
+  const fetchBotServiceStatus = async () => {
+    const data = await safeFetchJson<{ stopped: boolean }>('/api/bot-status');
+    if (data) {
+      setIsBotStopped(data.stopped);
     }
   };
 
-  const fetchAdminStats = async () => {
-    setLoadingStats(true);
+  const fetchAdminStats = async (silent: boolean = false) => {
+    if (!silent) setLoadingStats(true);
     try {
-      const res = await fetch('/api/admin-stats');
-      if (res.ok) {
-        const data = await res.json();
+      const data = await safeFetchJson<AdminStats>('/api/admin-stats');
+      if (data) {
         setAdminStats(data);
       }
-    } catch (err) {
-      console.error('Failed to pull admin statistics:', err);
     } finally {
-      setLoadingStats(false);
+      if (!silent) setLoadingStats(false);
     }
   };
 
-  const fetchSubscribers = async () => {
-    setLoadingUsers(true);
+  const fetchSubscribers = async (silent: boolean = false) => {
+    if (!silent) setLoadingUsers(true);
     try {
-      const res = await fetch('/api/users');
-      if (res.ok) {
-        const data: BotUser[] = await res.json();
+      const data = await safeFetchJson<BotUser[]>('/api/users');
+      if (data) {
         setSubscribers(data);
         
         // Sync our local simulator state representation with db record if it exists
@@ -136,23 +153,18 @@ export default function App() {
           setSimUser(currentSimRecord);
         }
       }
-    } catch (err) {
-      console.error('Failed to pull subscribers directory:', err);
     } finally {
-      setLoadingUsers(false);
+      if (!silent) setLoadingUsers(false);
     }
   };
 
   const fetchWebhookStatus = async () => {
     setLoadingWebhook(true);
     try {
-      const res = await fetch('/api/webhook-status');
-      if (res.ok) {
-        const data = await res.json();
+      const data = await safeFetchJson<WebhookStatus>('/api/webhook-status');
+      if (data) {
         setWebhookStatus(data);
       }
-    } catch (err) {
-      console.error('Failed to query Telegram API webhook status:', err);
     } finally {
       setLoadingWebhook(false);
     }
@@ -161,24 +173,23 @@ export default function App() {
   const fetchActivityLogs = async () => {
     setLoadingLogs(true);
     try {
-      const res = await fetch('/api/activity-logs');
-      if (res.ok) {
-        const data: ActivityLog[] = await res.json();
-        
-        // Dynamic detection of any new error logs
+      const data = await safeFetchJson<ActivityLog[]>('/api/activity-logs');
+      if (data) {
+        // Dynamic detection of freshly arrived error logs (only notify for active, new errors)
         setActivityLogs(prev => {
-          const prevIds = new Set(prev.map(l => l.id));
-          const newErrors = data.filter(l => l.status === 'error' && !prevIds.has(l.id));
-          if (newErrors.length > 0) {
-            setDismissedAlerts(false); // Make sure warning box shows up again
-            const latestError = newErrors[0];
-            triggerAlert(`⚠️ Error recorded: ${latestError.text}`, 'error');
+          if (prev.length > 0) {
+            const prevIds = new Set(prev.map(l => l.id));
+            const now = Date.now();
+            const freshErrors = data.filter(l => l.status === 'error' && !prevIds.has(l.id) && (now - l.timestamp < 60000));
+            if (freshErrors.length > 0) {
+              setDismissedAlerts(false); // Make sure warning box shows up for real new issues
+              const latestError = freshErrors[0];
+              triggerAlert(`⚠️ Error recorded: ${latestError.text}`, 'error');
+            }
           }
           return data;
         });
       }
-    } catch (err) {
-      console.error('Failed to fetch activity logs:', err);
     } finally {
       setLoadingLogs(false);
     }
@@ -195,17 +206,18 @@ export default function App() {
     initSimulatedChat();
   }, []);
 
-  // Live polling for logs and stats
+  // Live polling for logs, stats, subscribers, and webhook
   useEffect(() => {
     if (!logsAutoRefresh) return;
     
     const interval = setInterval(() => {
       fetchActivityLogs();
-      fetchAdminStats();
+      fetchAdminStats(true);
+      fetchSubscribers(true);
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [logsAutoRefresh]);
+  }, [logsAutoRefresh, simUser.chatId]);
 
   // --- CONTROLLER DELEGATE ACTIONS ---
   
@@ -271,12 +283,12 @@ export default function App() {
   };
 
   // Setup Webhook URL (called by GatewayManager)
-  const handleSetupWebhook = async (customUrl?: string) => {
+  const handleSetupWebhook = async (customUrl?: string, secretToken?: string) => {
     try {
       const res = await fetch('/api/webhook-setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: customUrl })
+        body: JSON.stringify({ url: customUrl, secretToken })
       });
       const data = await res.json();
       if (res.ok) {
@@ -579,11 +591,35 @@ export default function App() {
               </button>
             </div>
 
-            {/* Real-time status badge */}
+            {/* Real-time Bot status badge */}
             <div className="flex items-center gap-2.5 bg-slate-50 border border-slate-150 rounded-xl px-3 py-1.5" id="header_status_badge">
-              <span className={`h-2 w-2 rounded-full ${isBotStopped ? 'bg-rose-500' : (webhookStatus?.webhookActive ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400')}`}></span>
+              <span className={`h-2 w-2 rounded-full ${
+                isBotStopped 
+                  ? 'bg-rose-500' 
+                  : (webhookStatus?.botState && !webhookStatus.botState.isConnected)
+                    ? 'bg-rose-500 animate-pulse'
+                    : (webhookStatus?.webhookActive ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400')
+              }`}></span>
               <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wide">
-                {isBotStopped ? 'SERVICE STOPPED' : (webhookStatus?.webhookActive ? 'WEBHOOK ONLINE' : 'LONG-POLLING')}
+                {isBotStopped 
+                  ? 'SERVICE STOPPED' 
+                  : (webhookStatus?.botState && !webhookStatus.botState.isConnected)
+                    ? 'DISCONNECTED'
+                    : (webhookStatus?.webhookActive ? 'WEBHOOK ONLINE' : 'LONG-POLLING')}
+              </span>
+            </div>
+
+            {/* Cloud Firestore Persistence badge */}
+            <div 
+              className="flex items-center gap-2 bg-slate-50 border border-slate-150 rounded-xl px-3 py-1.5" 
+              id="header_db_badge"
+              title={webhookStatus?.dbHealth?.recentDbError ? `Database Note: ${webhookStatus.dbHealth.recentDbError}` : 'Cloud Firestore Authoritative Persistence Active'}
+            >
+              <span className={`h-2 w-2 rounded-full ${
+                webhookStatus?.dbHealth?.firestoreConnected ? 'bg-emerald-500' : 'bg-amber-400'
+              }`}></span>
+              <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wide">
+                {webhookStatus?.dbHealth?.firestoreConnected ? 'FIRESTORE CLOUD' : 'FIRESTORE PERSISTED'}
               </span>
             </div>
 
@@ -598,6 +634,22 @@ export default function App() {
               id="header_toggle_btn"
             >
               {isBotStopped ? '▶️ Restart Service' : '🛑 Stop Bot'}
+            </button>
+
+            {/* Instant refresh button */}
+            <button
+              onClick={() => {
+                fetchAdminStats();
+                fetchSubscribers();
+                fetchActivityLogs();
+                fetchWebhookStatus();
+                triggerAlert('⚡ All dashboard metrics and subscriber records synchronized', 'info');
+              }}
+              title="Synchronize All Dashboard Data"
+              className="flex items-center gap-1.5 text-[11px] bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 transition-colors px-3 py-1.5 rounded-lg font-bold cursor-pointer"
+              id="header_sync_btn"
+            >
+              <RefreshCw size={11} className={loadingStats || loadingUsers ? 'animate-spin' : ''} /> Sync
             </button>
 
             <a 
@@ -651,61 +703,68 @@ export default function App() {
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 lg:px-8 py-8" id="dashboard_body_frame">
         
         {/* PERSISTENT SYSTEM ERROR NOTIFICATION BOX */}
-        {activityLogs.filter(log => log.status === 'error').length > 0 && !dismissedAlerts && (
-          <div className="mb-6 bg-rose-50 border border-rose-200 rounded-3xl p-5 shadow-xs flex flex-col md:flex-row items-start justify-between gap-4 animate-slideIn" id="dashboard_system_errors_notification">
-            <div className="flex gap-3">
-              <div className="p-2.5 bg-rose-100 text-rose-700 rounded-xl shrink-0">
-                <AlertCircle size={20} />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-xs font-black uppercase tracking-wider text-rose-950 flex items-center gap-2">
-                  System Warnings & Conflict Alerts ({activityLogs.filter(log => log.status === 'error').length})
-                </h3>
-                <p className="text-xs text-rose-800 font-semibold">
-                  We detected {activityLogs.filter(log => log.status === 'error').length} recent system issue(s) in the log registry. This may indicate an API key error, database problem, AI retrieval issue, or a webhook conflict (409) with another bot instance:
-                </p>
-                <div className="mt-2.5 space-y-1.5 max-h-40 overflow-y-auto pr-2">
-                  {activityLogs.filter(log => log.status === 'error').slice(0, 3).map((log) => (
-                    <div key={log.id} className="text-[11px] font-mono text-rose-900 bg-white/65 px-3 py-1.5 rounded-lg border border-rose-100/60 flex items-start gap-2 leading-relaxed">
-                      <span className="text-[9px] bg-rose-200 text-rose-800 px-1.5 py-0.5 rounded shrink-0 font-bold">
-                        {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                      <span className="break-all">{log.text}</span>
-                    </div>
-                  ))}
-                  {activityLogs.filter(log => log.status === 'error').length > 3 && (
-                    <p className="text-[10px] text-rose-600 font-bold italic pl-1">
-                      + {activityLogs.filter(log => log.status === 'error').length - 3} more errors.
-                    </p>
-                  )}
+        {(() => {
+          const activeErrors = activityLogs.filter(log => log.status === 'error' && (Date.now() - log.timestamp < 3600000 || !webhookStatus?.botState?.isConnected));
+          if (activeErrors.length === 0 || dismissedAlerts) return null;
+
+          return (
+            <div className="mb-6 bg-rose-50 border border-rose-200 rounded-3xl p-5 shadow-xs flex flex-col md:flex-row items-start justify-between gap-4 animate-slideIn" id="dashboard_system_errors_notification">
+              <div className="flex gap-3">
+                <div className="p-2.5 bg-rose-100 text-rose-700 rounded-xl shrink-0">
+                  <AlertCircle size={20} />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-xs font-black uppercase tracking-wider text-rose-950 flex items-center gap-2">
+                    System Warnings & Connection Alerts ({activeErrors.length})
+                  </h3>
+                  <p className="text-xs text-rose-800 font-semibold">
+                    We detected {activeErrors.length} recent system issue(s). Use Gateway Settings to test Telegram connectivity or inspect detailed logs:
+                  </p>
+                  <div className="mt-2.5 space-y-1.5 max-h-40 overflow-y-auto pr-2">
+                    {activeErrors.slice(0, 3).map((log) => (
+                      <div key={log.id} className="text-[11px] font-mono text-rose-900 bg-white/65 px-3 py-1.5 rounded-lg border border-rose-100/60 flex items-start gap-2 leading-relaxed">
+                        <span className="text-[9px] bg-rose-200 text-rose-800 px-1.5 py-0.5 rounded shrink-0 font-bold">
+                          {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        <span className="break-all">{log.text}</span>
+                      </div>
+                    ))}
+                    {activeErrors.length > 3 && (
+                      <p className="text-[10px] text-rose-600 font-bold italic pl-1">
+                        + {activeErrors.length - 3} more errors.
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
+              
+              <div className="flex md:flex-col gap-2 shrink-0 w-full md:w-auto">
+                <button
+                  onClick={() => {
+                    setActiveTab('gateway');
+                    fetchWebhookStatus();
+                  }}
+                  className="flex-1 md:flex-none text-center bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] px-3.5 py-2 rounded-xl transition-all shadow-xs cursor-pointer"
+                >
+                  Gateway Settings
+                </button>
+                <button
+                  onClick={() => setDismissedAlerts(true)}
+                  className="flex-1 md:flex-none text-center bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold text-[11px] px-3.5 py-2 rounded-xl transition-all shadow-xs cursor-pointer"
+                >
+                  Dismiss Alert
+                </button>
+              </div>
             </div>
-            
-            <div className="flex md:flex-col gap-2 shrink-0 w-full md:w-auto">
-              <button
-                onClick={() => {
-                  setActiveTab('logs');
-                  fetchActivityLogs();
-                }}
-                className="flex-1 md:flex-none text-center bg-rose-950 hover:bg-rose-900 text-white font-bold text-[11px] px-3.5 py-2 rounded-xl transition-all shadow-xs cursor-pointer"
-              >
-                Inspect Full Logs
-              </button>
-              <button
-                onClick={() => setDismissedAlerts(true)}
-                className="flex-1 md:flex-none text-center bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold text-[11px] px-3.5 py-2 rounded-xl transition-all shadow-xs cursor-pointer"
-              >
-                Dismiss Alert
-              </button>
-            </div>
-          </div>
-        )}
+          );
+        })()}
         {activeTab === 'analytics' && (
           <AnalyticsHub 
             stats={adminStats} 
             loading={loadingStats} 
             onRefresh={fetchAdminStats} 
+            botState={webhookStatus?.botState}
+            isBotStopped={isBotStopped}
           />
         )}
 
